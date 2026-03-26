@@ -1,0 +1,1 @@
+import{j as t}from"./index-D0qeW8lw.js";import{A as s}from"./AppShell-BQ05WkLb.js";import{C as r}from"./ChartsPanel-CgOAZM80.js";import{I as n}from"./InsightPanel-C1JuMmGC.js";function m(){return t.jsxs(s,{title:"Public Insights & Trends",subtitle:"Most common complaint patterns and trend storytelling for citizens.",children:[t.jsx(r,{}),t.jsx(n,{})]})}export{m as PublicTrends};

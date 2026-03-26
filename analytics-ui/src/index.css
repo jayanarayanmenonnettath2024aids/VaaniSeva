@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --panel: #ffffff;
+  --text: #121826;
+  --muted: #5a657f;
+  --line: #d8e1f3;
+  --bg-a: #f4f8ff;
+  --bg-b: #e5edf8;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Trebuchet MS", "Verdana", sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at 0% 0%, #d5e3ff 0%, transparent 40%),
+    radial-gradient(circle at 100% 20%, #d8f5ef 0%, transparent 35%),
+    linear-gradient(160deg, var(--bg-a), var(--bg-b));
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.panel {
+  @apply rounded-2xl bg-white shadow-panel border border-slate-100;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0.2;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mapPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(20, 184, 166, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeUp 450ms ease-out;
+}
+
+.map-pulse {
+  animation: mapPulse 1.6s ease-out;
+}
