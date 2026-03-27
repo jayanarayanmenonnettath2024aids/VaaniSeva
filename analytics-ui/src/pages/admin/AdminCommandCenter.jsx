@@ -1,3 +1,5 @@
+import { MetricsPanel } from "../../components/MetricsPanel";
+import { NewTicketAlert } from "../../components/NewTicketAlert";
 import { AlertsPanel } from "../../components/AlertsPanel";
 import { AppShell } from "../../components/AppShell";
 import { ChartsPanel } from "../../components/ChartsPanel";
@@ -11,6 +13,7 @@ import { LiveTranscriptPanel } from "../../components/LiveTranscriptPanel";
 export function AdminCommandCenter() {
   return (
     <AppShell title="Command Center" subtitle="National command view with live KPIs, alerts, and drill-down heatmap.">
+      <NewTicketAlert />
       <KpiCards />
       <section className="grid xl:grid-cols-[2fr_1fr] gap-4">
         <DrilldownMap />
@@ -19,6 +22,7 @@ export function AdminCommandCenter() {
           <LiveTranscriptPanel />
           <ImpactPanel />
           <AlertsPanel />
+          <MetricsPanel />
         </div>
       </section>
       <ChartsPanel />

@@ -30,7 +30,11 @@ def get_issue_distribution() -> Dict[str, int]:
 def get_region_distribution() -> Dict[str, int]:
     distribution: Dict[str, int] = {}
     for ticket in ticket_service.list_tickets().values():
-        location = str(ticket.get("location", "") or "Unknown")
+        location = str(
+            ticket.get("normalized_location", "")
+            or ticket.get("location", "")
+            or "Unknown"
+        )
         distribution[location] = distribution.get(location, 0) + 1
     return distribution
 

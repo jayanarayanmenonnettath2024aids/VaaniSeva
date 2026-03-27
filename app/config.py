@@ -27,22 +27,26 @@ _load_env_file()
 @dataclass(frozen=True)
 class Settings:
     AI_MODEL_PROVIDER: str = os.getenv("AI_MODEL_PROVIDER", "local")
-    AI_API_KEY: str = os.getenv("AI_API_KEY", "")
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "phi3:mini")
     ACTION_ENGINE_URL: str = os.getenv("ACTION_ENGINE_URL", "")
     AI_ENGINE_URL: str = os.getenv("AI_ENGINE_URL", "")
 
+    BHASHINI_API_URL: str = os.getenv("BHASHINI_API_URL", "")
+    BHASHINI_API_KEY: str = os.getenv("BHASHINI_API_KEY", "")
+
     TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
     TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
     TWILIO_WHATSAPP_NUMBER: str = os.getenv("TWILIO_WHATSAPP_NUMBER", "")
+    SQLITE_DB_PATH: str = os.getenv("SQLITE_DB_PATH", "data/pallavi.db")
+    AUDIT_HASH_SALT: str = os.getenv("AUDIT_HASH_SALT", "pallavi-default-salt")
+    GEOCODING_URL: str = os.getenv("GEOCODING_URL", "https://nominatim.openstreetmap.org/search")
+    GEOCODING_USER_AGENT: str = os.getenv("GEOCODING_USER_AGENT", "pallavi-voice-system/1.0")
 
     EXOTEL_API_BASE_URL: str = os.getenv("EXOTEL_API_BASE_URL", "https://api.exotel.com/v1")
 
     SARVAM_STT_URL: str = os.getenv("SARVAM_STT_URL", "https://api.sarvam.ai/stt")
-    OPENAI_API_BASE_URL: str = os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
-    CLAUDE_API_BASE_URL: str = os.getenv("CLAUDE_API_BASE_URL", "https://api.anthropic.com/v1")
 
     EXOTEL_SID_INBOUND: str = os.getenv("EXOTEL_SID_INBOUND", "")
     EXOTEL_TOKEN_INBOUND: str = os.getenv("EXOTEL_TOKEN_INBOUND", "")

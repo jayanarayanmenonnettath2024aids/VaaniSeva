@@ -1,0 +1,1 @@
+import{j as t}from"./index-DBVBPs0u.js";import{A as r}from"./AppShell-DF1VxBBu.js";import{D as e}from"./DrilldownMap-CWs_eVF5.js";import{I as a}from"./InsightPanel-BXbVSUtK.js";function n(){return t.jsxs(r,{title:"Department Heatmap",subtitle:"Department-specific hotspots and regional drill-down analysis.",children:[t.jsx(e,{}),t.jsx(a,{})]})}export{n as DepartmentHeatmap};

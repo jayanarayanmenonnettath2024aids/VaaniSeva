@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 from typing import Any, Dict
 from uuid import uuid4
 
@@ -8,7 +10,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from app.config import settings
-from app.services import exotel_service, session_service, stt_service
+from app.services import audit_service, exotel_service, session_service, stt_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +52,32 @@ def _forward_to_ai_engine(payload: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+def _forward_to_ai_engine_async(payload: Dict[str, Any]) -> None:
+    if not settings.AI_ENGINE_URL:
+        return
+
+    try:
+        requests.post(settings.AI_ENGINE_URL, json=payload, timeout=3)
+    except Exception as exc:
+        logger.error("[AI ASYNC ERROR] %s", exc)
+
+
 @router.post("/incoming-call")
 async def incoming_call(request: Request) -> Response:
+    started = time.perf_counter()
     form = await request.form()
     call_id = str(form.get("CallSid", ""))
     mobile = str(form.get("From", ""))
 
     if not call_id:
+        audit_service.log_event(
+            stage="voice",
+            event_name="incoming_call",
+            mobile=mobile,
+            outcome="error",
+            error_code="missing_call_id",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
         return Response(
             content=exotel_service.generate_response_xml("Unable to process call."),
             media_type="application/xml",
@@ -64,6 +85,14 @@ async def incoming_call(request: Request) -> Response:
         )
 
     session_service.create(call_id=call_id, mobile=mobile)
+    audit_service.log_event(
+        stage="voice",
+        event_name="incoming_call",
+        call_id=call_id,
+        mobile=mobile,
+        outcome="ok",
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
 
     xml = exotel_service.generate_response_xml(
         "Welcome to PALLAVI voice system. Please speak after the beep."
@@ -73,20 +102,39 @@ async def incoming_call(request: Request) -> Response:
 
 @router.post("/process-recording")
 async def process_recording(request: Request) -> JSONResponse:
+    started = time.perf_counter()
     form = await request.form()
     recording_url = str(form.get("RecordingUrl", ""))
     call_id = str(form.get("CallSid", ""))
 
     if not call_id or not recording_url:
-        return JSONResponse(
+        audit_service.log_event(
+            stage="voice",
+            event_name="process_recording",
+            call_id=call_id,
+            outcome="error",
+            error_code="missing_fields",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        return Response(
+            content=exotel_service.generate_response_xml("Error: Missing recording information."),
+            media_type="application/xml",
             status_code=400,
-            content={"status": "error", "message": "CallSid and RecordingUrl are required"},
         )
 
     if not recording_url.startswith("http"):
-        return JSONResponse(
+        audit_service.log_event(
+            stage="voice",
+            event_name="process_recording",
+            call_id=call_id,
+            outcome="error",
+            error_code="invalid_recording_url",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        return Response(
+            content=exotel_service.generate_response_xml("Error: Invalid recording URL."),
+            media_type="application/xml",
             status_code=400,
-            content={"status": "error", "message": "RecordingUrl must start with http"},
         )
 
     session = session_service.get(call_id)
@@ -97,9 +145,19 @@ async def process_recording(request: Request) -> JSONResponse:
         stt_result = stt_service.process_audio(recording_url)
     except Exception as exc:
         logger.exception("Unexpected STT error: %s", exc)
-        return JSONResponse(
+        audit_service.log_event(
+            stage="voice",
+            event_name="process_recording",
+            call_id=call_id,
+            mobile=session.get("mobile", ""),
+            outcome="error",
+            error_code="stt_exception",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        return Response(
+            content=exotel_service.generate_response_xml("Error: Could not process your speech. Please try again."),
+            media_type="application/xml",
             status_code=500,
-            content={"status": "error", "message": "STT failed", "call_id": call_id},
         )
 
     text = stt_result.get("text", "")
@@ -108,9 +166,20 @@ async def process_recording(request: Request) -> JSONResponse:
         language = "en"
 
     if not text:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": "STT failed", "call_id": call_id},
+        audit_service.log_event(
+            stage="voice",
+            event_name="process_recording",
+            call_id=call_id,
+            mobile=session.get("mobile", ""),
+            outcome="error",
+            error_code="stt_empty",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            meta={"language": language, "stt_status": "empty"},
+        )
+        return Response(
+            content=exotel_service.generate_response_xml("We didn't catch that. Please try again."),
+            media_type="application/xml",
+            status_code=400,
         )
 
     session_service.update_language(call_id, language)
@@ -121,29 +190,43 @@ async def process_recording(request: Request) -> JSONResponse:
         "language": language,
         "mobile": session.get("mobile", ""),
     }
-    ai_forward_status = _forward_to_ai_engine(payload)
+    threading.Thread(target=_forward_to_ai_engine_async, args=(payload,), daemon=True).start()
 
-    return JSONResponse(
+    audit_service.log_event(
+        stage="voice",
+        event_name="process_recording",
+        call_id=call_id,
+        mobile=session.get("mobile", ""),
+        outcome="ok",
+        latency_ms=int((time.perf_counter() - started) * 1000),
+        meta={"language": language, "stt_status": "ok"},
+    )
+
+    # Return processing feedback XML to caller while AI processes in background
+    return Response(
+        content=exotel_service.generate_processing_response_xml(),
+        media_type="application/xml",
         status_code=200,
-        content={
-            "status": "ok",
-            "call_id": call_id,
-            "mobile": session.get("mobile", ""),
-            "text": text,
-            "language": language,
-            "ai_engine": ai_forward_status,
-        },
     )
 
 
 @router.post("/outbound-call")
 def outbound_call(body: OutboundCallRequest) -> JSONResponse:
+    started = time.perf_counter()
     message_url = f"{settings.BASE_URL}/voice-response"
 
     try:
         exotel_result = exotel_service.create_call(to=body.mobile, message_url=message_url)
     except Exception as exc:
         logger.exception("Outbound call failed unexpectedly: %s", exc)
+        audit_service.log_event(
+            stage="voice",
+            event_name="outbound_call",
+            mobile=body.mobile,
+            outcome="error",
+            error_code="outbound_exception",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
         return JSONResponse(
             status_code=500,
             content={
@@ -154,7 +237,23 @@ def outbound_call(body: OutboundCallRequest) -> JSONResponse:
         )
 
     if exotel_result.get("status") == "error":
+        audit_service.log_event(
+            stage="voice",
+            event_name="outbound_call",
+            mobile=body.mobile,
+            outcome="error",
+            error_code="outbound_provider_error",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
         return JSONResponse(status_code=502, content=exotel_result)
+
+    audit_service.log_event(
+        stage="voice",
+        event_name="outbound_call",
+        mobile=body.mobile,
+        outcome="ok",
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
 
     return JSONResponse(
         status_code=200,

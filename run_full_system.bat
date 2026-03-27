@@ -27,7 +27,7 @@ REM -----------------------------
 REM 2) Start Backend (FastAPI)
 REM -----------------------------
 echo [STEP 2/6] Starting backend on port 8000...
-start "PALLAVI - Backend" cmd /k "cd /d "%~dp0app" && echo [BACKEND] Starting uvicorn... && uvicorn main:app --reload --port 8000"
+start "PALLAVI - Backend" cmd /k cd /d "%~dp0app" ^&^& echo [BACKEND] Starting uvicorn... ^&^& uvicorn main:app --reload --port 8000
 
 echo [OK] Backend start command issued.
 echo.
@@ -36,7 +36,7 @@ REM -----------------------------
 REM 3) Start Frontend (Vite)
 REM -----------------------------
 echo [STEP 3/6] Starting frontend (Vite) on port 5173...
-start "PALLAVI - Frontend" cmd /k "cd /d "%~dp0analytics-ui" && echo [FRONTEND] Running npm dev server... && npm run dev"
+start "PALLAVI - Frontend" cmd /k cd /d "%~dp0analytics-ui" ^&^& echo [FRONTEND] Running npm dev server... ^&^& npm run dev
 
 echo [OK] Frontend start command issued.
 echo.

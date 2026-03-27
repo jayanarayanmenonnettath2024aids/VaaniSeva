@@ -1,9 +1,6 @@
 import json
-import os
 import re
 from typing import Any, Dict
-
-import requests
 
 from app.config import settings
 from app.services import local_ai_service
@@ -51,86 +48,18 @@ def _extract_json_object(raw_text: str) -> Dict[str, Any]:
         return {}
 
 
-def _call_openai_for_extraction(text: str) -> Dict[str, Any]:
-    endpoint = f"{settings.OPENAI_API_BASE_URL}/chat/completions"
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    prompt = (
-        "Extract complaint data and return strict JSON only with keys: "
-        "customer_name, mobile, issue, location, issue_type. "
-        "If unknown, use empty string. No extra keys."
-    )
+def fallback_extract(text: str) -> Dict[str, str]:
+    t = (text or "").lower()
+    issue_type = "General"
 
-    response = requests.post(
-        endpoint,
-        headers={
-            "Authorization": f"Bearer {settings.AI_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": text},
-            ],
-            "temperature": 0,
-        },
-        timeout=5,
-    )
-    response.raise_for_status()
-
-    data = response.json()
-    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    return _extract_json_object(content)
-
-
-def _call_claude_for_extraction(text: str) -> Dict[str, Any]:
-    endpoint = f"{settings.CLAUDE_API_BASE_URL}/messages"
-    model = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-latest")
-    prompt = (
-        "Extract complaint data and return strict JSON only with keys: "
-        "customer_name, mobile, issue, location, issue_type. "
-        "If unknown, use empty string. No extra keys."
-    )
-
-    response = requests.post(
-        endpoint,
-        headers={
-            "x-api-key": settings.AI_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": model,
-            "max_tokens": 200,
-            "temperature": 0,
-            "messages": [
-                {"role": "user", "content": f"{prompt}\n\nInput: {text}"},
-            ],
-        },
-        timeout=5,
-    )
-    response.raise_for_status()
-
-    data = response.json()
-    chunks = data.get("content", [])
-    content = ""
-    if isinstance(chunks, list) and chunks:
-        content = str(chunks[0].get("text", ""))
-    return _extract_json_object(content)
-
-
-def _rule_based_extract(text: str) -> Dict[str, str]:
-    lowered = text.lower()
-    issue_type = ""
-
-    if any(token in lowered for token in ["pothole", "road", "street"]):
-        issue_type = "road"
-    elif any(token in lowered for token in ["water", "leak", "drain", "sewage"]):
-        issue_type = "water"
-    elif any(token in lowered for token in ["electric", "power", "street light", "eb"]):
-        issue_type = "electricity"
-    elif any(token in lowered for token in ["garbage", "waste", "clean"]):
-        issue_type = "sanitation"
+    if any(k in t for k in ["pothole", "road", "street"]):
+        issue_type = "Road"
+    elif "water" in t:
+        issue_type = "Water"
+    elif any(k in t for k in ["electric", "power"]):
+        issue_type = "Electricity"
+    elif any(k in t for k in ["garbage", "waste"]):
+        issue_type = "Garbage"
 
     mobile_match = re.search(r"(?:\+91[- ]?)?[6-9]\d{9}", text)
     mobile = mobile_match.group(0) if mobile_match else ""
@@ -141,7 +70,7 @@ def _rule_based_extract(text: str) -> Dict[str, str]:
     return {
         "customer_name": customer_name,
         "mobile": mobile,
-        "issue": text.strip(),
+        "issue": text,
         "location": "",
         "issue_type": issue_type,
     }
@@ -153,22 +82,18 @@ def extract_issue(text: str) -> Dict[str, str]:
 
     extracted: Dict[str, Any] = {}
 
-    provider = settings.AI_MODEL_PROVIDER.lower().strip()
-
-    if provider == "local":
+    if settings.AI_MODEL_PROVIDER.lower().strip() == "local":
         extracted = local_ai_service.extract_with_local_ai(text)
-    elif settings.AI_API_KEY:
-        try:
-            if provider == "openai":
-                extracted = _call_openai_for_extraction(text)
-            elif provider == "claude":
-                extracted = _call_claude_for_extraction(text)
-        except Exception:
-            extracted = {}
-
-    if not extracted:
-        extracted = _rule_based_extract(text)
 
     validated = validate_json(extracted)
     validated["issue_type"] = normalize_issue(validated.get("issue_type", ""))
+
+    if (
+        not validated.get("issue")
+        or not validated.get("issue_type")
+        or validated.get("issue_type") == "General"
+    ):
+        validated = validate_json(fallback_extract(text))
+        validated["issue_type"] = normalize_issue(validated.get("issue_type", ""))
+
     return validated

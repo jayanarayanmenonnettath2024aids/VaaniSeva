@@ -61,11 +61,22 @@ def create_call(to: str, message_url: str) -> Dict[str, Any]:
 
 
 def generate_response_xml(message: str) -> str:
+    """Generate Exotel XML response with voice feedback."""
     safe_message = escape(message)
     action_url = f"{settings.BASE_URL}/process-recording"
     return (
         "<Response>\n"
         f"  <Say voice=\"woman\">{safe_message}</Say>\n"
         f"  <Record maxLength=\"30\" action=\"{action_url}\" />\n"
+        "</Response>"
+    )
+
+
+def generate_processing_response_xml() -> str:
+    """Generate processing feedback XML (plays while system processes request)."""
+    return (
+        "<Response>\n"
+        "  <Say voice=\"woman\">Thank you. Please wait while we process your request.</Say>\n"
+        "  <Pause length=\"2\" />\n"
         "</Response>"
     )

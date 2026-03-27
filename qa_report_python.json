@@ -1,0 +1,198 @@
+{
+  "timestamp": "2026-03-27T08:15:39.973356",
+  "backend_url": "http://127.0.0.1:8000",
+  "duration_seconds": 7.803053,
+  "tests": [
+    {
+      "name": "Health Endpoint",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "Voice Response XML",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "AI Process Text",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "  \u251c\u2500 Call ID Binding",
+      "passed": true,
+      "status_code": null,
+      "details": "call_id: smoke-ai-001"
+    },
+    {
+      "name": "  \u251c\u2500 Issue Extraction",
+      "passed": true,
+      "status_code": null,
+      "details": "type: Road"
+    },
+    {
+      "name": "  \u2514\u2500 Response Generated",
+      "passed": true,
+      "status_code": null,
+      "details": "length: 193"
+    },
+    {
+      "name": "Action Process",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "  \u251c\u2500 Ticket Created",
+      "passed": true,
+      "status_code": null,
+      "details": "ticket: TKT-031497"
+    },
+    {
+      "name": "  \u251c\u2500 Department Assigned",
+      "passed": true,
+      "status_code": null,
+      "details": "dept: Municipality"
+    },
+    {
+      "name": "  \u2514\u2500 SLA Hours Set",
+      "passed": true,
+      "status_code": null,
+      "details": "sla: 24h"
+    },
+    {
+      "name": "Analytics: /analytics/summary",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "Analytics: /analytics/issues",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "Analytics: /analytics/regions",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "Analytics: /analytics/sla",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "Analytics: /analytics/audit-summary",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "Setup: Call ID",
+      "passed": true,
+      "status_code": null,
+      "details": "id: integ-e2e-7994"
+    },
+    {
+      "name": "Setup: Mobile",
+      "passed": true,
+      "status_code": null,
+      "details": "mobile: +919523186835"
+    },
+    {
+      "name": "  \u251c\u2500 Incoming Call",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "  \u251c\u2500 AI Process",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "  \u251c\u2500 Language Detected",
+      "passed": true,
+      "status_code": null,
+      "details": "lang: en"
+    },
+    {
+      "name": "  \u251c\u2500 Issue Type Extracted",
+      "passed": true,
+      "status_code": null,
+      "details": "type: Electricity"
+    },
+    {
+      "name": "  \u251c\u2500 Tickets Fetch",
+      "passed": true,
+      "status_code": 200,
+      "details": ""
+    },
+    {
+      "name": "  \u2514\u2500 Tickets in DB",
+      "passed": true,
+      "status_code": null,
+      "details": "count: 17"
+    },
+    {
+      "name": "  \u251c\u2500 Rejects Invalid URL",
+      "passed": true,
+      "status_code": 400,
+      "details": "expect 400"
+    },
+    {
+      "name": "  \u251c\u2500 Handles Empty Text",
+      "passed": true,
+      "status_code": 400,
+      "details": ""
+    },
+    {
+      "name": "  \u2514\u2500 Rejects Missing Fields",
+      "passed": true,
+      "status_code": 422,
+      "details": ""
+    },
+    {
+      "name": "DB: Schema Migrations",
+      "passed": true,
+      "status_code": null,
+      "details": "count: 4"
+    },
+    {
+      "name": "DB: Tickets Table",
+      "passed": true,
+      "status_code": null,
+      "details": "count: 17"
+    },
+    {
+      "name": "DB: Audit Timeline",
+      "passed": true,
+      "status_code": null,
+      "details": "count: 32"
+    },
+    {
+      "name": "DB: DPDP Hashed Refs",
+      "passed": true,
+      "status_code": null,
+      "details": "call_ref and mobile_ref present"
+    },
+    {
+      "name": "DB: Audit Metadata",
+      "passed": true,
+      "status_code": null,
+      "details": "keys: issue_type, language"
+    }
+  ],
+  "summary": {
+    "passed": 31,
+    "failed": 0,
+    "total": 31
+  }
+}

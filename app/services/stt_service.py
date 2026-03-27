@@ -10,10 +10,11 @@ _sarvam_balancer = RoundRobinBalancer(settings.SARVAM_API_KEYS)
 
 
 def whisper_transcribe(audio_url: str) -> Dict[str, str]:
-    # Placeholder fallback until a managed Whisper endpoint is connected.
+    # Explicit fallback error until a real Whisper endpoint is integrated.
     return {
-        "text": f"[whisper_fallback] Could not transcribe via Sarvam for {audio_url}",
+        "text": "",
         "language": "unknown",
+        "error": "whisper_not_configured",
     }
 
 
@@ -29,7 +30,7 @@ def _sarvam_transcribe(audio_url: str) -> Dict[str, str]:
         "api-key": api_key,
     }
 
-    response = requests.post(endpoint, json=payload, headers=headers, timeout=5)
+    response = requests.post(endpoint, json=payload, headers=headers, timeout=3)
     response.raise_for_status()
 
     data = response.json() if response.content else {}
@@ -46,10 +47,8 @@ def process_audio(audio_url: str) -> Dict[str, str]:
     try:
         return _sarvam_transcribe(audio_url)
     except requests.Timeout:
-        return {
-            "text": "",
-            "language": "unknown",
-            "error": "sarvam_timeout",
-        }
+        # Timeout → fallback to Whisper
+        return whisper_transcribe(audio_url)
     except Exception:
+        # Any other error → fallback to Whisper
         return whisper_transcribe(audio_url)

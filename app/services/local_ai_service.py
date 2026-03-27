@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Any, Dict
 
 import requests
@@ -13,9 +14,13 @@ def call_local_model(prompt: str) -> str:
         "model": settings.OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
+        "options": {
+            "num_predict": 120,
+            "temperature": 0.2,
+        },
     }
 
-    response = requests.post(endpoint, json=payload, timeout=10)
+    response = requests.post(endpoint, json=payload, timeout=2.5)
     response.raise_for_status()
     data = response.json() if response.content else {}
     return str(data.get("response", "")).strip()
@@ -44,6 +49,7 @@ def _extract_json_object(raw_text: str) -> Dict[str, Any]:
 
 
 def extract_with_local_ai(text: str) -> Dict[str, str]:
+    """Extract complaint details with hard timeout budget (2.5s max)."""
     prompt = (
         "Extract complaint details from input and return strict JSON only with keys: "
         "customer_name, mobile, issue, location, issue_type. "
@@ -51,8 +57,17 @@ def extract_with_local_ai(text: str) -> Dict[str, str]:
         f"Input: {text}"
     )
 
+    start = time.time()
+    budget = 2.5  # Hard timeout budget
+    
     try:
         output = call_local_model(prompt)
+        elapsed = time.time() - start
+        
+        # If we're over budget, return fallback without parsing
+        if elapsed > budget:
+            return validate_json({})
+        
         parsed = _extract_json_object(output)
         return validate_json(parsed)
     except Exception:
