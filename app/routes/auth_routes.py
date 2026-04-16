@@ -1,5 +1,4 @@
 """Authentication routes: login, logout, token validation."""
-import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
@@ -9,22 +8,48 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 
 from app.config import settings
-from app.services.db_service import get_connection
+from app.services.rbac_service import (
+    hash_password,
+    verify_password,
+    blacklist_token,
+    cleanup_expired_blacklist,
+    verify_jwt,
+    JWT_SECRET,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # JWT configuration
-JWT_SECRET = settings.JWT_SECRET if hasattr(settings, "JWT_SECRET") else "vaaniseva-default-secret-change-me"
 JWT_EXPIRY_HOURS = settings.JWT_EXPIRY_HOURS if hasattr(settings, "JWT_EXPIRY_HOURS") else 24
 
-# Demo users (replace with database lookup)
+# Demo users with hashed passwords
 DEMO_USERS = {
-    "admin": {"password": "admin123", "role": "admin", "department": None, "name": "National Admin"},
-    "pwd_officer": {"password": "pwd123", "role": "department", "department": "PWD", "name": "PWD Officer"},
-    "water_officer": {"password": "water123", "role": "department", "department": "Municipality", "name": "Water Officer"},
-    "sanitation": {"password": "sanit123", "role": "department", "department": "Sanitation", "name": "Sanitation Officer"},
+    "admin": {
+        "password_hash": hash_password("admin123"),
+        "role": "admin",
+        "department": None,
+        "name": "National Admin",
+    },
+    "pwd_officer": {
+        "password_hash": hash_password("pwd123"),
+        "role": "department",
+        "department": "PWD",
+        "name": "PWD Officer",
+    },
+    "water_officer": {
+        "password_hash": hash_password("water123"),
+        "role": "department",
+        "department": "Municipality",
+        "name": "Water Officer",
+    },
+    "sanitation": {
+        "password_hash": hash_password("sanit123"),
+        "role": "department",
+        "department": "Sanitation",
+        "name": "Sanitation Officer",
+    },
 }
 
 
@@ -56,16 +81,6 @@ def generate_jwt(username: str, role: str, department: Optional[str] = None) -> 
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
-def verify_jwt(token: str) -> Dict[str, Any]:
-    """Verify and decode JWT token."""
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-
 def extract_token(authorization: Optional[str] = Header(None)) -> str:
     """Extract bearer token from Authorization header."""
     if not authorization:
@@ -93,13 +108,16 @@ def login(body: LoginRequest) -> LoginResponse:
     username = body.username.lower().strip()
     password = body.password.strip()
 
-    # Demo authentication against in-memory user store
-    # TODO: Replace with database lookup + password hashing (bcrypt)
-    if username not in DEMO_USERS or DEMO_USERS[username]["password"] != password:
-        logger.warning("[AUTH] Failed login attempt: username=%s", username)
+    # Demo authentication with password hashing verification
+    if username not in DEMO_USERS:
+        logger.warning("[AUTH] Failed login attempt: username=%s (not found)", username)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    
+    user_data = DEMO_USERS[username]
+    if not verify_password(password, user_data["password_hash"]):
+        logger.warning("[AUTH] Failed login attempt: username=%s (wrong password)", username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    user_data = DEMO_USERS[username]
     token = generate_jwt(username, user_data["role"], user_data.get("department"))
 
     user_response = {
@@ -116,12 +134,22 @@ def login(body: LoginRequest) -> LoginResponse:
 @router.post("/logout")
 async def logout(authorization: Optional[str] = Header(None)) -> Dict[str, str]:
     """
-    Logout endpoint (token-based, stateless).
-    In production, add token to blacklist store (Redis).
+    Logout endpoint: Blacklist the token.
+    Token is added to revocation list and future use is rejected.
     """
+    token = extract_token(authorization)
     user = await get_current_user(authorization)
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        expiry_time = datetime.fromtimestamp(payload["exp"]).isoformat()
+        blacklist_token(token, expiry_time)
+    except jwt.InvalidTokenError:
+        pass
+    
     logger.info("[AUTH] User logged out: username=%s", user.get("sub"))
-    return {"status": "ok", "message": "Logged out successfully"}
+    cleanup_expired_blacklist()
+    return {"status": "ok", "message": "Logged out successfully, token revoked"}
 
 
 @router.get("/me")

@@ -14,6 +14,9 @@ from app.services import (
     routing_service,
     sla_service,
     ticket_service,
+    cost_service,
+    escalation_service,
+    language_response_service,
 )
 
 router = APIRouter()
@@ -135,6 +138,23 @@ def process_action(body: ProcessActionRequest) -> JSONResponse:
         mobile = str(ticket.get("mobile", ""))
         notification_service._send_async(notification_service.send_sms, mobile, sms_text)
         notification_service._send_async(notification_service.send_whatsapp, mobile, whatsapp_text)
+
+        # Best-effort telemetry capture for cost and latency tracking.
+        try:
+            cost_service.log_call_telemetry(
+                call_id=body.call_id or ticket.get("ticket_id", ""),
+                ticket_id=ticket.get("ticket_id", ""),
+                stt_provider="groq",
+                stt_latency_ms=0,
+                extraction_latency_ms=0,
+                routing_latency_ms=0,
+                stt_duration_sec=0.0,
+                call_duration_sec=0.0,
+                sms_sent=True,
+                whatsapp_sent=True,
+            )
+        except Exception:
+            pass
 
         audit_service.log_event(
             stage="action",
@@ -342,3 +362,256 @@ def mark_closed(ticket_id: str, user: Dict[str, Any] = Depends(rbac_service.get_
         return JSONResponse(status_code=400, content={"status": "error", "message": "Ticket is not resolved"})
     
     return JSONResponse(status_code=200, content={"status": "closed", "ticket": updated})
+
+
+# ============ COST TRACKING ENDPOINTS ============
+
+@router.post("/analytics/log-cost")
+def log_call_cost(
+    call_id: str,
+    ticket_id: str = "",
+    stt_duration_sec: float = 0.0,
+    call_duration_sec: float = 0.0,
+    sms_sent: bool = False,
+    whatsapp_sent: bool = False,
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Log cost metrics for a call (STT, extraction, SMS, call charges)."""
+    result = cost_service.log_call_telemetry(
+        call_id=call_id,
+        ticket_id=ticket_id,
+        stt_duration_sec=stt_duration_sec,
+        call_duration_sec=call_duration_sec,
+        sms_sent=sms_sent,
+        whatsapp_sent=whatsapp_sent,
+    )
+    return JSONResponse(status_code=200, content=result)
+
+
+@router.get("/i18n/response")
+def get_localized_response(
+    language: str = "en",
+    context_key: str = "issue_received",
+    issue_type: str = "complaint",
+    ticket_id: str = "",
+    sla_hours: int = 24,
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Get localized response text for voice/SMS workflows."""
+    text = language_response_service.get_response(
+        language=language,
+        context_key=context_key,
+        variables={
+            "issue_type": issue_type,
+            "ticket_id": ticket_id,
+            "sla_hours": sla_hours,
+        },
+    )
+    return JSONResponse(status_code=200, content={"language": language, "context_key": context_key, "text": text})
+
+
+@router.get("/analytics/cost-summary")
+def get_cost_summary(
+    start_date: str = "",
+    end_date: str = "",
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Get cost summary for a time period (admin only)."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    summary = cost_service.get_cost_summary(start_date=start_date, end_date=end_date)
+    return JSONResponse(status_code=200, content=summary)
+
+
+@router.get("/tickets/{ticket_id}/cost")
+def get_ticket_cost(ticket_id: str, user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    """Get cost breakdown for a specific ticket."""
+    ticket = ticket_service.get_ticket(ticket_id)
+    if not ticket:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "Ticket not found"})
+    
+    if user.get("role") == "department" and ticket.get("department") != user.get("department"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    
+    cost_data = cost_service.get_cost_per_ticket(ticket_id)
+    return JSONResponse(status_code=200, content=cost_data)
+
+
+# ============ ESCALATION ENDPOINTS ============
+
+@router.post("/escalation/rules")
+def create_escalation_rule(
+    source_dept: str,
+    dest_dept: str,
+    escalation_level: int = 1,
+    sla_minutes_threshold: int = 30,
+    contact_method: str = "sms",
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Create escalation rule (admin only)."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    rule = escalation_service.create_escalation_rule(
+        source_dept=source_dept,
+        dest_dept=dest_dept,
+        escalation_level=escalation_level,
+        sla_minutes_threshold=sla_minutes_threshold,
+        contact_method=contact_method,
+    )
+    return JSONResponse(status_code=201, content=rule)
+
+
+@router.get("/escalation/rules/{dept_id}")
+def get_escalation_chain(dept_id: str, user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    """Get escalation chain for a department."""
+    chain = escalation_service.get_escalation_chain(dept_id)
+    return JSONResponse(status_code=200, content={"escalation_chain": chain})
+
+
+@router.post("/escalation/trigger/{ticket_id}")
+def trigger_escalation(
+    ticket_id: str,
+    escalation_level: int = 1,
+    reason: str = "SLA threshold exceeded",
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Trigger escalation for a ticket."""
+    ticket = ticket_service.get_ticket(ticket_id)
+    if not ticket:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "Ticket not found"})
+    
+    current_dept = ticket.get("department")
+    result = escalation_service.trigger_escalation(
+        ticket_id=ticket_id,
+        current_dept=current_dept,
+        escalation_level=escalation_level,
+        reason=reason,
+    )
+    
+    if not result:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "error", "message": f"No escalation rule found for {current_dept} level {escalation_level}"},
+        )
+    
+    return JSONResponse(status_code=200, content=result)
+
+
+@router.get("/tickets/{ticket_id}/escalation-history")
+def get_escalation_history(
+    ticket_id: str,
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Get escalation history for a ticket."""
+    ticket = ticket_service.get_ticket(ticket_id)
+    if not ticket:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "Ticket not found"})
+    
+    if user.get("role") == "department" and ticket.get("department") != user.get("department"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    
+    history = escalation_service.get_escalation_history(ticket_id)
+    return JSONResponse(status_code=200, content={"escalation_history": history})
+
+
+# ============ DATA PRIVACY & DELETION ============
+
+@router.delete("/tickets/{ticket_id}")
+def delete_ticket(
+    ticket_id: str,
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Soft-delete a ticket (admin only, for GDPR compliance)."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    from app.services.db_service import get_connection
+    with get_connection() as conn:
+        conn.execute("UPDATE tickets SET deleted_at = datetime('now') WHERE ticket_id = ?", (ticket_id,))
+    
+    return JSONResponse(status_code=200, content={"status": "deleted", "ticket_id": ticket_id})
+
+
+@router.post("/data-deletion-request/{mobile}")
+def request_data_deletion(mobile: str, user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    """Request data deletion for a mobile number (GDPR right to be forgotten)."""
+    from app.services.db_service import get_connection
+    from datetime import datetime
+    
+    # Only admin users can request deletion
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    # Mark all tickets for this mobile as deleted
+    deletion_id = f"del_{mobile}_{int(datetime.utcnow().timestamp())}"
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE tickets SET deleted_at = datetime('now'), deletion_request_id = ? WHERE mobile = ?",
+            (deletion_id, mobile),
+        )
+        stats = conn.execute(
+            "SELECT COUNT(*) AS ticket_count FROM tickets WHERE mobile = ?",
+            (mobile,),
+        ).fetchone()
+        ticket_count = int(stats["ticket_count"] if stats else 0)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO data_deletion_requests(
+                deletion_request_id, mobile, requested_at, ticket_count, status, reason
+            ) VALUES (?, ?, datetime('now'), ?, 'completed', 'admin_requested')
+            """,
+            (deletion_id, mobile, ticket_count),
+        )
+    
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "deletion_requested",
+            "deletion_id": deletion_id,
+            "mobile": mobile,
+            "message": "Data deletion request submitted. All records for this mobile will be deleted."
+        },
+    )
+
+
+@router.get("/analytics/deletion-status/{deletion_id}")
+def get_deletion_status(
+    deletion_id: str,
+    user: Dict[str, Any] = Depends(rbac_service.get_current_user),
+) -> JSONResponse:
+    """Check status of data deletion request."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    from app.services.db_service import get_connection
+    with get_connection() as conn:
+        request_row = conn.execute(
+            """
+            SELECT deletion_request_id, mobile, requested_at, completed_at, ticket_count, status, reason
+            FROM data_deletion_requests
+            WHERE deletion_request_id = ?
+            """,
+            (deletion_id,),
+        ).fetchone()
+        ticket_row = conn.execute(
+            "SELECT COUNT(*) AS deleted_count, MAX(deleted_at) AS deletion_timestamp FROM tickets WHERE deletion_request_id = ?",
+            (deletion_id,),
+        ).fetchone()
+
+    req = dict(request_row) if request_row else {}
+    tickets = dict(ticket_row) if ticket_row else {"deleted_count": 0, "deletion_timestamp": None}
+    return JSONResponse(
+        status_code=200,
+        content={
+            "deletion_id": deletion_id,
+            "status": req.get("status", "unknown"),
+            "mobile": req.get("mobile"),
+            "requested_at": req.get("requested_at"),
+            "completed_at": req.get("completed_at"),
+            "reason": req.get("reason"),
+            "deleted_records": tickets.get("deleted_count", 0),
+            "deletion_timestamp": tickets.get("deletion_timestamp"),
+        },
+    )

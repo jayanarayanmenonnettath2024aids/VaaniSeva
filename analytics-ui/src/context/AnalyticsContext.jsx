@@ -1,8 +1,30 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState, useEffect, useCallback } from "react";
 
 import { complaints as seedComplaints } from "../data/mockData";
 
 const AnalyticsContext = createContext(null);
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+function mapTicketToComplaint(ticket) {
+  return {
+    id: ticket.ticket_id,
+    issue_type: ticket.issue_type || "General",
+    issue: ticket.issue || "",
+    department: ticket.department || "General",
+    status: ticket.status || "created",
+    priority: ticket.priority || "low",
+    location: ticket.normalized_location || ticket.location || "Unknown",
+    district: ticket.normalized_location || ticket.location || "Unknown",
+    state: "Tamil Nadu",
+    country: "India",
+    lat: ticket.coordinates_lat || 11.0168,
+    lng: ticket.coordinates_lng || 76.9558,
+    created_at: ticket.created_at || new Date().toISOString(),
+    resolved_at: ticket.resolved_at || null,
+    sla_hours: ticket.sla_hours || 24,
+    breached: Boolean(ticket.sla_breached),
+  };
+}
 
 function isWithinRange(createdAt, range) {
   const now = new Date("2026-03-26T12:00:00Z").getTime();
@@ -110,6 +132,40 @@ export function AnalyticsProvider({ children }) {
       status: "active"
     }
   ]);
+
+  const refreshFromBackend = useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem("vaaniseva_token");
+      if (!token) {
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/tickets`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        return;
+      }
+
+      const data = await res.json();
+      const rows = Array.isArray(data?.tickets) ? data.tickets : [];
+      if (!rows.length) {
+        return;
+      }
+
+      setComplaints(rows.map(mapTicketToComplaint));
+      setLastUpdateAt(Date.now());
+    } catch {
+      // Keep UI functional in offline/demo mode.
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshFromBackend();
+  }, [refreshFromBackend]);
 
   const playNotification = () => {
     try {
@@ -366,6 +422,7 @@ export function AnalyticsProvider({ children }) {
     lastUpdateAt,
     notifications,
     setNotifications,
+    refreshFromBackend,
   };
 
   return <AnalyticsContext.Provider value={value}>{children}</AnalyticsContext.Provider>;

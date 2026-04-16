@@ -4,9 +4,9 @@ import { useAuth } from "../context/AuthContext";
 
 const DEMO = [
   { username: "admin",       password: "admin123", label: "National Admin",     role: "Admin",        icon: "🛡️", color: "blue"   },
-  { username: "pwd",         password: "pwd123",   label: "PWD Department",     role: "Dept Officer", icon: "🏗️", color: "emerald"},
-  { username: "electricity", password: "elec123",  label: "Electricity Board",  role: "Dept Officer", icon: "⚡", color: "amber"  },
-  { username: "sanitation",  password: "san123",   label: "Sanitation Dept.",   role: "Dept Officer", icon: "♻️", color: "violet" },
+  { username: "pwd_officer",   password: "pwd123",   label: "PWD Department",     role: "Dept Officer", icon: "🏗️", color: "emerald"},
+  { username: "water_officer", password: "water123", label: "Water Board",        role: "Dept Officer", icon: "⚡", color: "amber"  },
+  { username: "sanitation",    password: "sanit123", label: "Sanitation Dept.",   role: "Dept Officer", icon: "♻️", color: "violet" },
 ];
 
 const chipColors = {

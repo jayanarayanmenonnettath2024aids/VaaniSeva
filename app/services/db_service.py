@@ -253,6 +253,54 @@ def _migration_6_e2e_timing_and_workflow(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_call_telemetry_created_at ON call_telemetry(created_at)")
 
 
+def _migration_7_data_deletion_and_privacy(conn: sqlite3.Connection) -> None:
+    """Add data deletion and privacy tracking columns for GDPR compliance."""
+    # Add deletion tracking columns to tickets
+    deletion_columns = {
+        "deleted_at": "TEXT",
+        "deletion_request_id": "TEXT",
+        "escalation_level": "INTEGER DEFAULT 0",
+    }
+    
+    for col, col_type in deletion_columns.items():
+        if not _column_exists(conn, "tickets", col):
+            conn.execute(f"ALTER TABLE tickets ADD COLUMN {col} {col_type}")
+    
+    # Create data deletion request tracking table
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS data_deletion_requests (
+            deletion_request_id TEXT PRIMARY KEY,
+            mobile TEXT NOT NULL,
+            requested_at TEXT NOT NULL,
+            completed_at TEXT,
+            ticket_count INTEGER,
+            status TEXT DEFAULT 'pending',  -- pending, completed, failed
+            reason TEXT
+        )
+        """
+    )
+    
+    # Create audit trail table for sensitive operations (with hashed identifiers)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS audit_trail (
+            audit_id TEXT PRIMARY KEY,
+            operation TEXT,  -- login, logout, delete, read_sensitive
+            user_id TEXT,
+            timestamp TEXT NOT NULL,
+            ip_address TEXT,
+            status TEXT,
+            error_message TEXT
+        )
+        """
+    )
+    
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deletion_requests_mobile ON data_deletion_requests(mobile)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_trail_timestamp ON audit_trail(timestamp)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_trail_user_id ON audit_trail(user_id)")
+
+
 MIGRATIONS: List[Tuple[int, str, MigrationFn]] = [
     (1, "base_schema", _migration_1_base_schema),
     (2, "indexes", _migration_2_indexes),
@@ -260,6 +308,7 @@ MIGRATIONS: List[Tuple[int, str, MigrationFn]] = [
     (4, "audit_timeline", _migration_4_audit_timeline),
     (5, "multi_tenancy_and_auth", _migration_5_multi_tenancy_and_auth),
     (6, "e2e_timing_and_workflow", _migration_6_e2e_timing_and_workflow),
+    (7, "data_deletion_and_privacy", _migration_7_data_deletion_and_privacy),
 ]
 
 
