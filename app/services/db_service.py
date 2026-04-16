@@ -209,12 +209,57 @@ def _migration_5_multi_tenancy_and_auth(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tickets_city_id ON tickets(city_id)")
 
 
+def _migration_6_e2e_timing_and_workflow(conn: sqlite3.Connection) -> None:
+    """Add E2E timing checkpoints and workflow status for ticket lifecycle tracking."""
+    # Add E2E timing columns for instrumentation
+    timing_columns = {
+        "sla_breached": "BOOLEAN DEFAULT 0",
+        "stt_completed_at": "TEXT",
+        "extraction_completed_at": "TEXT",
+        "routing_completed_at": "TEXT",
+        "assigned_at": "TEXT",
+        "in_progress_at": "TEXT",
+        "closed_at": "TEXT",
+        "cost_estimate": "REAL DEFAULT 0.0",
+    }
+    
+    for col, col_type in timing_columns.items():
+        if not _column_exists(conn, "tickets", col):
+            conn.execute(f"ALTER TABLE tickets ADD COLUMN {col} {col_type}")
+    
+    # Create call_telemetry table for cost and performance tracking
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS call_telemetry (
+            call_id TEXT PRIMARY KEY,
+            ticket_id TEXT,
+            stt_provider TEXT,
+            stt_cost REAL DEFAULT 0.0,
+            extraction_cost REAL DEFAULT 0.0,
+            sms_cost REAL DEFAULT 0.0,
+            call_cost REAL DEFAULT 0.0,
+            total_cost REAL DEFAULT 0.0,
+            stt_latency_ms INTEGER,
+            extraction_latency_ms INTEGER,
+            routing_latency_ms INTEGER,
+            total_latency_ms INTEGER,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)
+        )
+        """
+    )
+    
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_call_telemetry_ticket_id ON call_telemetry(ticket_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_call_telemetry_created_at ON call_telemetry(created_at)")
+
+
 MIGRATIONS: List[Tuple[int, str, MigrationFn]] = [
     (1, "base_schema", _migration_1_base_schema),
     (2, "indexes", _migration_2_indexes),
     (3, "ticket_location_normalization", _migration_3_ticket_location_normalization),
     (4, "audit_timeline", _migration_4_audit_timeline),
     (5, "multi_tenancy_and_auth", _migration_5_multi_tenancy_and_auth),
+    (6, "e2e_timing_and_workflow", _migration_6_e2e_timing_and_workflow),
 ]
 
 

@@ -45,6 +45,14 @@ def _row_to_ticket(row: Any) -> Dict[str, Any]:
             "lng": float(row["coordinates_lng"] or 0.0),
         },
         "resolved_at": row["resolved_at"],
+        "closed_at": row.get("closed_at"),
+        "sla_breached": bool(row.get("sla_breached", False)),
+        # E2E timing checkpoints
+        "stt_completed_at": row.get("stt_completed_at"),
+        "extraction_completed_at": row.get("extraction_completed_at"),
+        "routing_completed_at": row.get("routing_completed_at"),
+        "assigned_at": row.get("assigned_at"),
+        "in_progress_at": row.get("in_progress_at"),
     }
 
 
@@ -87,8 +95,10 @@ def create_ticket(data: Dict[str, Any], routing_info: Dict[str, Any], city_id: s
                 ticket_id, city_id, call_id, customer_name, mobile, issue, location,
                 issue_type, department, status, priority, sla_hours,
                 created_at, sla_deadline, coordinates_lat, coordinates_lng,
-                normalized_location, geocode_provider, resolved_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                normalized_location, geocode_provider, resolved_at, closed_at,
+                sla_breached, stt_completed_at, extraction_completed_at, routing_completed_at,
+                assigned_at, in_progress_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ticket["ticket_id"],
@@ -110,6 +120,13 @@ def create_ticket(data: Dict[str, Any], routing_info: Dict[str, Any], city_id: s
                 ticket["normalized_location"],
                 ticket["geocode_provider"],
                 ticket["resolved_at"],
+                ticket.get("closed_at"),
+                ticket.get("sla_breached", False),
+                ticket.get("stt_completed_at"),
+                ticket.get("extraction_completed_at"),
+                ticket.get("routing_completed_at"),
+                ticket.get("assigned_at"),
+                ticket.get("in_progress_at"),
             ),
         )
 
@@ -135,6 +152,78 @@ def update_status(ticket_id: str, status: str) -> Dict[str, Any] | None:
 
     ticket = _row_to_ticket(row)
     return ticket or None
+
+
+def transition_to_in_progress(ticket_id: str) -> Dict[str, Any] | None:
+    """Transition ticket from assigned → in_progress."""
+    now = datetime.utcnow().isoformat()
+    
+    with get_connection() as conn:
+        updated = conn.execute(
+            """
+            UPDATE tickets
+            SET status = 'in_progress', in_progress_at = ?
+            WHERE ticket_id = ? AND status = 'assigned'
+            """,
+            (now, ticket_id),
+        )
+        if updated.rowcount == 0:
+            return None
+        
+        row = conn.execute("SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,)).fetchone()
+    
+    return _row_to_ticket(row) if row else None
+
+
+def resolve_ticket(ticket_id: str) -> Dict[str, Any] | None:
+    """Transition ticket from in_progress → resolved."""
+    now = datetime.utcnow().isoformat()
+    
+    with get_connection() as conn:
+        # Fetch ticket first to check SLA
+        ticket = conn.execute("SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,)).fetchone()
+        if not ticket:
+            return None
+        
+        # Check if SLA was breached
+        sla_deadline = ticket["sla_deadline"]
+        sla_breached = now > sla_deadline if sla_deadline else False
+        
+        # Update ticket to resolved
+        conn.execute(
+            """
+            UPDATE tickets
+            SET status = 'resolved', resolved_at = ?, sla_breached = ?
+            WHERE ticket_id = ?
+            """,
+            (now, sla_breached, ticket_id),
+        )
+        
+        # Fetch updated ticket
+        row = conn.execute("SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,)).fetchone()
+    
+    return _row_to_ticket(row) if row else None
+
+
+def close_ticket(ticket_id: str) -> Dict[str, Any] | None:
+    """Transition ticket from resolved → closed."""
+    now = datetime.utcnow().isoformat()
+    
+    with get_connection() as conn:
+        updated = conn.execute(
+            """
+            UPDATE tickets
+            SET status = 'closed', closed_at = ?
+            WHERE ticket_id = ? AND status = 'resolved'
+            """,
+            (now, ticket_id),
+        )
+        if updated.rowcount == 0:
+            return None
+        
+        row = conn.execute("SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,)).fetchone()
+    
+    return _row_to_ticket(row) if row else None
 
 
 def backfill_issue_for_call(call_id: str, issue: str, issue_type: str = "General") -> bool:

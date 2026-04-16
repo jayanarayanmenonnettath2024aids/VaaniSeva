@@ -2,7 +2,7 @@ import json
 import time
 from typing import Any, Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -10,6 +10,7 @@ from app.services import (
     analytics_service,
     audit_service,
     notification_service,
+    rbac_service,
     routing_service,
     sla_service,
     ticket_service,
@@ -19,10 +20,15 @@ router = APIRouter()
 
 
 @router.get("/analytics/metrics")
-def analytics_metrics() -> JSONResponse:
-    """Get impressive operational metrics for dashboard display."""
+def analytics_metrics(user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    """Get operational metrics filtered by user's role and department."""
     tickets_dict = ticket_service.list_tickets()
     tickets = list(tickets_dict.values()) if tickets_dict else []
+    
+    # Apply RBAC filter
+    if user.get("role") == "department":
+        user_dept = user.get("department")
+        tickets = [t for t in tickets if t.get("department") == user_dept]
     
     resolved_tickets = [t for t in tickets if t.get("status") == "resolved"]
     active_tickets = [t for t in tickets if t.get("status") != "resolved"]
@@ -101,6 +107,19 @@ def _safe_structured_data(data: StructuredData, call_id: str) -> Dict[str, Any]:
         "location": data.location or "",
         "issue_type": data.issue_type or "",
     }
+
+
+def _get_filtered_tickets(user: Dict[str, Any]) -> list:
+    """Get tickets filtered by user's role and department."""
+    tickets_dict = ticket_service.list_tickets()
+    tickets = list(tickets_dict.values()) if tickets_dict else []
+    
+    # Admins see all tickets, department staff see only their department's
+    if user.get("role") == "department":
+        user_dept = user.get("department")
+        tickets = [t for t in tickets if t.get("department") == user_dept]
+    
+    return tickets
 
 
 @router.post("/process-action")
@@ -195,36 +214,66 @@ def update_ticket_status(ticket_id: str, body: UpdateStatusRequest) -> JSONRespo
 
 
 @router.get("/tickets/{ticket_id}")
-def get_ticket(ticket_id: str) -> JSONResponse:
+def get_ticket(ticket_id: str, user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
     ticket = ticket_service.get_ticket(ticket_id)
     if not ticket:
         return JSONResponse(status_code=404, content={"status": "error", "message": "Ticket not found"})
+    
+    # RBAC: department staff can only view their own department's tickets
+    if user.get("role") == "department" and ticket.get("department") != user.get("department"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    
     return JSONResponse(status_code=200, content=ticket)
 
 
 @router.get("/tickets")
-def list_tickets() -> JSONResponse:
-    return JSONResponse(status_code=200, content={"tickets": list(ticket_service.list_tickets().values())})
+def list_tickets(user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    tickets = _get_filtered_tickets(user)
+    return JSONResponse(status_code=200, content={"tickets": tickets})
 
 
 @router.get("/analytics/summary")
-def analytics_summary() -> JSONResponse:
-    return JSONResponse(status_code=200, content=analytics_service.get_summary())
+def analytics_summary(user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    tickets = _get_filtered_tickets(user)
+    summary = {
+        "total_tickets": len(tickets),
+        "open_tickets": len([t for t in tickets if t.get("status") in ["created", "assigned", "in_progress"]]),
+        "resolved_tickets": len([t for t in tickets if t.get("status") == "resolved"]),
+        "sla_breaches": len([t for t in tickets if t.get("sla_breached")]),
+    }
+    return JSONResponse(status_code=200, content=summary)
 
 
 @router.get("/analytics/issues")
-def analytics_issues() -> JSONResponse:
-    return JSONResponse(status_code=200, content=analytics_service.get_issue_distribution())
+def analytics_issues(user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    tickets = _get_filtered_tickets(user)
+    issue_counts = {}
+    for t in tickets:
+        issue_type = t.get("issue_type", "General")
+        issue_counts[issue_type] = issue_counts.get(issue_type, 0) + 1
+    return JSONResponse(status_code=200, content={"distribution": issue_counts})
 
 
 @router.get("/analytics/regions")
-def analytics_regions() -> JSONResponse:
-    return JSONResponse(status_code=200, content=analytics_service.get_region_distribution())
+def analytics_regions(user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    tickets = _get_filtered_tickets(user)
+    region_counts = {}
+    for t in tickets:
+        location = t.get("normalized_location", "Unknown")
+        region_counts[location] = region_counts.get(location, 0) + 1
+    return JSONResponse(status_code=200, content={"distribution": region_counts})
 
 
 @router.get("/analytics/sla")
-def analytics_sla() -> JSONResponse:
-    return JSONResponse(status_code=200, content=analytics_service.get_sla_performance())
+def analytics_sla(user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    tickets = _get_filtered_tickets(user)
+    sla_data = {
+        "total_tickets": len(tickets),
+        "breached_count": len([t for t in tickets if t.get("sla_breached")]),
+        "on_track_count": len([t for t in tickets if not t.get("sla_breached") and t.get("status") != "resolved"]),
+        "resolved_on_time": len([t for t in tickets if t.get("status") == "resolved" and not t.get("sla_breached")]),
+    }
+    return JSONResponse(status_code=200, content=sla_data)
 
 
 @router.get("/analytics/audit-summary")
@@ -243,8 +292,53 @@ def run_sla_monitor_endpoint() -> JSONResponse:
 
 
 @router.post("/resolve-ticket/{ticket_id}")
-def resolve_ticket(ticket_id: str) -> JSONResponse:
-    updated = ticket_service.update_status(ticket_id, "resolved")
-    if not updated:
+def resolve_ticket(ticket_id: str, user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    """Resolve a ticket (transition from in_progress → resolved)."""
+    # Check authorization
+    ticket = ticket_service.get_ticket(ticket_id)
+    if not ticket:
         return JSONResponse(status_code=404, content={"status": "error", "message": "Ticket not found"})
+    
+    if user.get("role") == "department" and ticket.get("department") != user.get("department"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    
+    # Update to resolved (with SLA checking)
+    updated = ticket_service.resolve_ticket(ticket_id)
+    if not updated:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "Cannot resolve ticket in current status"})
+    
     return JSONResponse(status_code=200, content={"status": "resolved", "ticket": updated})
+
+
+@router.post("/tickets/{ticket_id}/transition/in-progress")
+def mark_in_progress(ticket_id: str, user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    """Mark ticket as in-progress (assigned → in_progress)."""
+    ticket = ticket_service.get_ticket(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+    
+    if user.get("role") == "department" and ticket.get("department") != user.get("department"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    
+    updated = ticket_service.transition_to_in_progress(ticket_id)
+    if not updated:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "Cannot transition to in-progress"})
+    
+    return JSONResponse(status_code=200, content={"status": "in_progress", "ticket": updated})
+
+
+@router.post("/tickets/{ticket_id}/transition/closed")
+def mark_closed(ticket_id: str, user: Dict[str, Any] = Depends(rbac_service.get_current_user)) -> JSONResponse:
+    """Close a resolved ticket (resolved → closed)."""
+    ticket = ticket_service.get_ticket(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+    
+    if user.get("role") == "department" and ticket.get("department") != user.get("department"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    
+    updated = ticket_service.close_ticket(ticket_id)
+    if not updated:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "Ticket is not resolved"})
+    
+    return JSONResponse(status_code=200, content={"status": "closed", "ticket": updated})

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.routes.ai_routes import router as ai_router
 from app.routes.action_routes import router as action_router
 from app.routes.auth_routes import router as auth_router
+from app.routes.department_routes import router as department_router
 from app.routes.ragam_routes import router as ragam_router
 from app.routes.voice_routes import router as voice_router
 from app.services import db_service, sla_service
@@ -13,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="VaaniSeva Multi-Module Backend", version="1.0.0")
 app.include_router(auth_router)
+app.include_router(department_router)
 app.include_router(voice_router)
 app.include_router(ai_router)
 app.include_router(action_router)
