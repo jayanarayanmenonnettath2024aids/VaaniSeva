@@ -147,11 +147,74 @@ def _migration_4_audit_timeline(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_call_ref ON audit_timeline(call_ref)")
 
 
+def _migration_5_multi_tenancy_and_auth(conn: sqlite3.Connection) -> None:
+    """Add city_id to tickets and create users/auth_tokens tables for multi-tenancy support."""
+    # Add city_id to tickets table (tracks which city/municipality ticket belongs to)
+    if not _column_exists(conn, "tickets", "city_id"):
+        conn.execute('ALTER TABLE tickets ADD COLUMN city_id TEXT DEFAULT "coimbatore"')
+    
+    # Create users table for authentication
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT,
+            role TEXT NOT NULL,
+            department TEXT,
+            city_id TEXT,
+            name TEXT,
+            active BOOLEAN DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    
+    # Create auth_tokens table for token tracking (optional, for stateful auth/logout)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS auth_tokens (
+            token_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            token_hash TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+        """
+    )
+    
+    # Create departments table for administration
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS departments (
+            department_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            city_id TEXT NOT NULL,
+            issue_type TEXT,
+            sla_hours INTEGER DEFAULT 24,
+            contact_email TEXT,
+            active BOOLEAN DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    
+    # Create indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_department ON users(department)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_departments_city_id ON departments(city_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tickets_city_id ON tickets(city_id)")
+
+
 MIGRATIONS: List[Tuple[int, str, MigrationFn]] = [
     (1, "base_schema", _migration_1_base_schema),
     (2, "indexes", _migration_2_indexes),
     (3, "ticket_location_normalization", _migration_3_ticket_location_normalization),
     (4, "audit_timeline", _migration_4_audit_timeline),
+    (5, "multi_tenancy_and_auth", _migration_5_multi_tenancy_and_auth),
 ]
 
 

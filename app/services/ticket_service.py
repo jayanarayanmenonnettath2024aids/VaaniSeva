@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict
 
+from app.config import settings
 from app.models.ticket_model import build_ticket_model
 from app.services.db_service import get_connection
 from app.services.geocoding_service import geocode_location
@@ -24,6 +25,7 @@ def _row_to_ticket(row: Any) -> Dict[str, Any]:
 
     return {
         "ticket_id": str(row["ticket_id"] or ""),
+        "city_id": str(row.get("city_id", "coimbatore") or "coimbatore"),
         "call_id": str(row["call_id"] or ""),
         "customer_name": str(row["customer_name"] or ""),
         "mobile": str(row["mobile"] or ""),
@@ -46,7 +48,10 @@ def _row_to_ticket(row: Any) -> Dict[str, Any]:
     }
 
 
-def create_ticket(data: Dict[str, Any], routing_info: Dict[str, Any]) -> Dict[str, Any]:
+def create_ticket(data: Dict[str, Any], routing_info: Dict[str, Any], city_id: str = None) -> Dict[str, Any]:
+    if city_id is None:
+        city_id = settings.CITY_ID
+    
     ticket_id = generate_ticket_id()
     sla_hours = int(routing_info.get("sla_hours", 24))
     created_at = get_current_time()
@@ -68,6 +73,7 @@ def create_ticket(data: Dict[str, Any], routing_info: Dict[str, Any]) -> Dict[st
         created_at=created_at.isoformat(),
         sla_deadline=sla_deadline.isoformat(),
         coordinates=coordinates,
+        city_id=city_id,
     )
 
     ticket["status"] = "assigned"
@@ -78,14 +84,15 @@ def create_ticket(data: Dict[str, Any], routing_info: Dict[str, Any]) -> Dict[st
         conn.execute(
             """
             INSERT INTO tickets(
-                ticket_id, call_id, customer_name, mobile, issue, location,
+                ticket_id, city_id, call_id, customer_name, mobile, issue, location,
                 issue_type, department, status, priority, sla_hours,
                 created_at, sla_deadline, coordinates_lat, coordinates_lng,
                 normalized_location, geocode_provider, resolved_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ticket["ticket_id"],
+                ticket["city_id"],
                 ticket["call_id"],
                 ticket["customer_name"],
                 ticket["mobile"],

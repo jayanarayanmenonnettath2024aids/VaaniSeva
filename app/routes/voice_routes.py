@@ -80,7 +80,7 @@ class SimulateRecordingRequest(BaseModel):
 
 
 def _build_outbound_prompt(message: str) -> str:
-    intro = "Welcome to PALLAVI civic complaint helpline. I am PALLAVI, your AI voice assistant. "
+    intro = "Welcome to VaaniSeva civic complaint helpline. I am your AI voice assistant. "
     body = (message or "").strip()
     if not body:
         body = "Please describe your complaint after the beep."
@@ -358,7 +358,7 @@ async def incoming_call(request: Request) -> Response:
     )
 
     xml = twilio_voice_service.generate_response_xml(
-        "Welcome to PALLAVI voice system. Please speak after the beep."
+        "Welcome to VaaniSeva voice system. Please speak after the beep."
     )
     return Response(content=xml, media_type="application/xml")
 
@@ -582,11 +582,11 @@ async def process_recording(request: Request) -> JSONResponse:
 
     if _should_end_conversation(text, language):
         bye_messages = {
-            "en": "Thank you for calling PALLAVI. Goodbye.",
-            "ta": "PALLAVI-க்கு அழைத்ததற்கு நன்றி. வணக்கம்.",
-            "hi": "PALLAVI को कॉल करने के लिए धन्यवाद। नमस्ते।",
-            "ml": "PALLAVI-ലേക്ക് വിളിച്ചതിന് നന്ദി. നമസ്കാരം.",
-            "te": "PALLAVI కి కాల్ చేసినందుకు ధన్యవాదాలు. నమస్కారం.",
+            "en": "Thank you for calling VaaniSeva. Goodbye.",
+            "ta": "VaaniSeva-க்கு அழைத்ததற்கு நன்றி. வணக்கம்.",
+            "hi": "VaaniSeva को कॉल करने के लिए धन्यवाद। नमस्ते।",
+            "ml": "VaaniSeva-ലേക്ക് വിളിച്ചതിന് നന്ദി. നമസ്കാരം.",
+            "te": "VaaniSeva కి కాల్ చేసినందుకు ధన్యవాదాలు. నమస్కారం.",
         }
         _send_post_call_notifications(call_id=call_id, mobile=str(session.get("mobile", "") or ""))
         return Response(

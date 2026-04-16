@@ -15,9 +15,11 @@ def build_ticket_model(
     created_at: str,
     sla_deadline: str,
     coordinates: Dict[str, float],
+    city_id: str = "coimbatore",
 ) -> Dict[str, Any]:
     return {
         "ticket_id": ticket_id,
+        "city_id": city_id,
         "call_id": call_id,
         "customer_name": customer_name,
         "mobile": mobile,

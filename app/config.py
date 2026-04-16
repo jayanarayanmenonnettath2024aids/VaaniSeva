@@ -46,10 +46,10 @@ class Settings:
     TWILIO_SMS_NUMBER: str = os.getenv("TWILIO_SMS_NUMBER", "")
     TWILIO_WHATSAPP_NUMBER: str = os.getenv("TWILIO_WHATSAPP_NUMBER", "")
 
-    SQLITE_DB_PATH: str = os.getenv("SQLITE_DB_PATH", "data/pallavi.db")
-    AUDIT_HASH_SALT: str = os.getenv("AUDIT_HASH_SALT", "pallavi-default-salt")
+    SQLITE_DB_PATH: str = os.getenv("SQLITE_DB_PATH", "data/vaaniseva.db")
+    AUDIT_HASH_SALT: str = os.getenv("AUDIT_HASH_SALT", "vaaniseva-default-salt")
     GEOCODING_URL: str = os.getenv("GEOCODING_URL", "https://nominatim.openstreetmap.org/search")
-    GEOCODING_USER_AGENT: str = os.getenv("GEOCODING_USER_AGENT", "pallavi-voice-system/1.0")
+    GEOCODING_USER_AGENT: str = os.getenv("GEOCODING_USER_AGENT", "vaaniseva-voice-system/1.0")
 
     SARVAM_STT_URL: str = os.getenv("SARVAM_STT_URL", "https://api.sarvam.ai/stt")
 
@@ -100,6 +100,14 @@ class Settings:
 
     # Lyzr AI Voice (RAGAM AI agent)
     LYZR_API_KEY: str = os.getenv("LYZR_API_KEY", "")
+
+    # Authentication & JWT
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "vaaniseva-change-me-in-production")
+    JWT_EXPIRY_HOURS: int = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
+    
+    # Multi-tenancy
+    CITY_ID: str = os.getenv("CITY_ID", "coimbatore")  # Default city for single-tenant deployments
+    ORGANIZATION_NAME: str = os.getenv("ORGANIZATION_NAME", "VaaniSeva")
 
     def __post_init__(self) -> None:
         api_keys_raw = os.getenv("SARVAM_API_KEYS", "")
