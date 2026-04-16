@@ -118,7 +118,7 @@ def detect_and_switch(call_id: str, text: str, stt_lang: str = "") -> str:
     previous = str(state.get("language", "") or "")
 
     # Fast detection using local heuristics
-    detected = detect_language(text)
+    detected = detect_language(text, stt_lang=stt_lang)
     if detected not in SUPPORTED_LANGUAGES:
         detected = "en"
 

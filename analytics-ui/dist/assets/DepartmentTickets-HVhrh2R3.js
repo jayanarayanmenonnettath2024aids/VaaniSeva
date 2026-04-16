@@ -1,1 +1,0 @@
-import{j as t}from"./index-DBVBPs0u.js";import{A as e}from"./AppShell-DF1VxBBu.js";import{T as i}from"./TicketTable-D6X9Mqiv.js";function a(){return t.jsx(e,{title:"Ticket Operations Panel",subtitle:"Full ticket operations table with filter-aware cross interactions.",children:t.jsx(i,{})})}export{a as DepartmentTickets};

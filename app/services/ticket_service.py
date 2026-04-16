@@ -4,6 +4,7 @@ from typing import Any, Dict
 from app.models.ticket_model import build_ticket_model
 from app.services.db_service import get_connection
 from app.services.geocoding_service import geocode_location
+from app.services.routing_service import get_department
 from app.utils.id_generator import generate_ticket_id
 from app.utils.time_utils import add_hours, get_current_time
 
@@ -127,6 +128,62 @@ def update_status(ticket_id: str, status: str) -> Dict[str, Any] | None:
 
     ticket = _row_to_ticket(row)
     return ticket or None
+
+
+def backfill_issue_for_call(call_id: str, issue: str, issue_type: str = "General") -> bool:
+    """Backfill latest empty ticket for a call with delayed STT/extraction output."""
+    clean_call_id = str(call_id or "").strip()
+    clean_issue = str(issue or "").strip()
+    clean_issue_type = str(issue_type or "General").strip() or "General"
+
+    if not clean_call_id or not clean_issue:
+        return False
+
+    with get_connection() as conn:
+        target = conn.execute(
+            """
+            SELECT rowid, issue_type FROM tickets
+            WHERE call_id = ? AND COALESCE(issue, '') = ''
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (clean_call_id,),
+        ).fetchone()
+
+        if not target:
+            return False
+
+        existing_issue_type = str(target["issue_type"] or "").strip()
+        should_reclassify = existing_issue_type.lower() in {"", "general"}
+
+        if not should_reclassify:
+            updated = conn.execute(
+                """
+                UPDATE tickets
+                SET issue = ?
+                WHERE rowid = ?
+                """,
+                (clean_issue, target["rowid"]),
+            )
+        else:
+            routing = get_department(clean_issue_type)
+            updated = conn.execute(
+                """
+                UPDATE tickets
+                SET issue = ?, issue_type = ?, department = ?, sla_hours = ?, priority = ?
+                WHERE rowid = ?
+                """,
+                (
+                    clean_issue,
+                    clean_issue_type,
+                    str(routing.get("department", "General Department")),
+                    int(routing.get("sla_hours", 24)),
+                    _get_priority(clean_issue_type),
+                    target["rowid"],
+                ),
+            )
+
+    return bool(updated.rowcount)
 
 
 def get_ticket(ticket_id: str) -> Dict[str, Any] | None:

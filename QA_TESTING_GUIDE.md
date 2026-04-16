@@ -15,7 +15,7 @@ Observed result summary:
 1. Python QA suite: 31/31 passed (report: `qa_report_python.json`)
 2. Frontend build: success via Vite
 3. `/process-action`: ticket created and notifications queued
-4. `/outbound-call`: provider error expected when Exotel credentials are not configured
+4. `/outbound-call`: provider error expected when Twilio voice credentials are not configured
 
 ## 2. Test Modes
 
@@ -25,7 +25,7 @@ Use two modes to cover everything.
 - Validates backend, AI/action integration, database persistence, audit logging, frontend build and dashboard behavior.
 
 2. Mode B: Provider-connected E2E
-- Validates real Exotel inbound/outbound calls and real Twilio SMS/WhatsApp delivery.
+- Validates real Twilio inbound/outbound calls and real Twilio SMS/WhatsApp delivery.
 - Requires valid credentials and public webhook URL.
 
 ## 3. Prerequisites
@@ -51,10 +51,10 @@ Set these in `.env` for real provider testing:
 - `TWILIO_PHONE_NUMBER`
 - `TWILIO_WHATSAPP_NUMBER`
 
-2. Exotel:
-- `EXOTEL_SID`
-- `EXOTEL_TOKEN`
-- `EXOTEL_NUMBER`
+2. Twilio Voice:
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_PHONE_NUMBER` (or `TWILIO_VOICE_NUMBER`)
 
 3. Public callback URL:
 - `BASE_URL` must point to your public URL (for example ngrok)
@@ -135,9 +135,9 @@ Open:
 
 ## 6. Manual End-to-End Scenarios
 
-## 6.1 Inbound voice webhook flow (Exotel-style)
+## 6.1 Inbound voice webhook flow (Twilio-style)
 
-This verifies `/incoming-call` accepts form webhook and returns Exotel XML.
+This verifies `/incoming-call` accepts form webhook and returns TwiML XML.
 
 ```powershell
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/incoming-call" \
@@ -172,7 +172,7 @@ Expected:
 2. No backend crash
 
 Provider-connected case:
-1. Exotel sends real recording URL
+1. Twilio sends real recording URL
 2. Endpoint returns processing feedback XML
 3. AI forwarding continues asynchronously
 
@@ -208,8 +208,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/outbound-call" \
 ```
 
 Expected:
-1. With valid Exotel config: HTTP 200 and provider response
-2. Without Exotel config: provider error (expected)
+1. With valid Twilio voice config: HTTP 200 and provider response
+2. Without Twilio voice config: provider error (expected)
 
 ## 6.5 SMS and WhatsApp E2E (Twilio)
 
@@ -303,8 +303,8 @@ Mark QA complete only if all are true:
 - Fix: use `application/x-www-form-urlencoded`
 
 3. Outbound call returns 502
-- Cause: Exotel credentials missing/invalid
-- Fix: verify Exotel env values and `BASE_URL`
+- Cause: Twilio voice credentials missing/invalid
+- Fix: verify Twilio env values and `BASE_URL`
 
 4. SMS/WhatsApp not received
 - Cause: Twilio creds missing, sender not approved, sandbox limitations

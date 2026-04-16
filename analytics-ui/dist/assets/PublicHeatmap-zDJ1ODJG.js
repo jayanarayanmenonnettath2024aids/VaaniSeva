@@ -1,1 +1,0 @@
-import{j as i}from"./index-DBVBPs0u.js";import{A as t}from"./AppShell-DF1VxBBu.js";import{D as r}from"./DrilldownMap-CWs_eVF5.js";function n(){return i.jsx(t,{title:"Public Heatmap",subtitle:"Public-facing issue density map with transparent region drill-down.",children:i.jsx(r,{})})}export{n as PublicHeatmap};

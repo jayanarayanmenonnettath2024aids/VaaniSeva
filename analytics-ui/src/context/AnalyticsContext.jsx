@@ -33,10 +33,82 @@ export function AnalyticsProvider({ children }) {
     {
       id: "call-live-1",
       caller: "Ravi Kumar",
+      phone: "+91 98765 43210",
       language: "Tamil",
+      location: "Anna Nagar, Chennai",
+      district: "Chennai",
       issue: "Road pothole",
+      issue_type: "Road",
+      department: "PWD",
+      priority: "High",
       status: "Processing...",
+      duration: "2m 14s",
+      started_at: new Date(Date.now() - 134000).toISOString(),
+      ticket_id: "TKT-882341",
+      conversation: [
+        { role: "system", text: "Call connected. AI processing in Tamil." },
+        { role: "caller", text: "வணக்கம். என் வீட்டு அருகில் பெரிய குழி உள்ளது." },
+        { role: "ai",     text: "நீங்கள் எந்த பகுதியில் இருக்கிறீர்கள்?" },
+        { role: "caller", text: "அண்ணா நகர் 2வது குறுக்குத் தெரு, சென்னை." },
+        { role: "ai",     text: "புரிந்தது. சாலை பழுது பற்றிய புகார் பதிவு செய்யப்படுகிறது. தலைமைப் பொது வேலைகள் துறைக்கு அனுப்பப்படும்." },
+        { role: "system", text: "Ticket TKT-882341 created → Department: PWD → Priority: High" },
+        { role: "system", text: "SMS confirmation sent to +91 98765 43210" },
+      ],
     },
+    {
+      id: "call-live-2",
+      caller: "Meena Devi",
+      phone: "+91 87654 32109",
+      language: "English",
+      location: "Vadapalani, Chennai",
+      district: "Chennai",
+      issue: "Streetlight outage",
+      issue_type: "Electricity",
+      department: "Electricity Board",
+      priority: "Medium",
+      status: "Ticket created",
+      duration: "1m 08s",
+      started_at: new Date(Date.now() - 68000).toISOString(),
+      ticket_id: "TKT-882340",
+      conversation: [
+        { role: "system", text: "Call connected. AI processing in English." },
+        { role: "caller", text: "Hello, the streetlights on our road have been off for 3 days." },
+        { role: "ai",     text: "I'm sorry to hear that. Can you tell me your exact location?" },
+        { role: "caller", text: "It's on Main Road near the Vadapalani bus stop." },
+        { role: "ai",     text: "Understood. I'm raising a complaint for streetlight outage with the Electricity Board now." },
+        { role: "system", text: "Ticket TKT-882340 created → Department: Electricity Board → Priority: Medium" },
+        { role: "system", text: "SMS confirmation sent to +91 87654 32109" },
+      ],
+    },
+  ]);
+  const [notifications, setNotifications] = useState([
+    {
+      id: "notif-1",
+      title: "New Public Library",
+      description: "The Anna Nagar digital library is now open to the public from 8 AM to 8 PM.",
+      category: "Education",
+      location: "Anna Nagar",
+      created_at: new Date().toISOString(),
+      status: "active"
+    },
+    {
+      id: "notif-2",
+      title: "Road Maintenance",
+      description: "Resurfacing operations on 2nd Main Road starting tonight at 10 PM. Please use alternate routes.",
+      category: "Road",
+      location: "North Ward",
+      created_at: new Date().toISOString(),
+      status: "active"
+    },
+    {
+      id: "notif-3",
+      title: "New Smart Park",
+      description: "Development of the 'Green Delta' smart park has been completed in Thanjavur. Features include free Wi-Fi and solar benches.",
+      category: "Govt Project",
+      location: "Thanjavur",
+      created_at: new Date().toISOString(),
+      status: "active"
+    }
   ]);
 
   const playNotification = () => {
@@ -89,17 +161,35 @@ export function AnalyticsProvider({ children }) {
 
   const startDemoMode = () => {
     const newComplaint = createDemoComplaint();
-
+    const ticketId = `TKT-${Math.floor(100000 + Math.random() * 899999)}`;
     setComplaints((prev) => [newComplaint, ...prev]);
     setLiveCalls((prev) => [
       {
         id: `call-${Date.now()}`,
         caller: "Ravi Kumar",
+        phone: "+91 98765 43210",
         language: "Tamil",
+        location: "Anna Nagar, Chennai",
+        district: "Chennai",
         issue: "Road pothole",
+        issue_type: "Road",
+        department: "PWD",
+        priority: "High",
         status: "Ticket created",
+        duration: "2m 14s",
+        started_at: new Date().toISOString(),
+        ticket_id: ticketId,
+        conversation: [
+          { role: "system", text: "Call connected. AI processing in Tamil." },
+          { role: "caller", text: "வணக்கம். என் வீட்டு அருகில் பெரிய குழி உள்ளது." },
+          { role: "ai",     text: "நீங்கள் எந்த பகுதியில் இருக்கிறீர்கள்?" },
+          { role: "caller", text: "அண்ணா நகர் 2வது குறுக்குத் தெரு, சென்னை." },
+          { role: "ai",     text: "புரிந்தது. சாலை பழுது பற்றிய புகார் பதிவு செய்யப்படுகிறது." },
+          { role: "system", text: `Ticket ${ticketId} created → Department: PWD → Priority: High` },
+          { role: "system", text: "SMS confirmation sent to +91 98765 43210" },
+        ],
       },
-      ...prev.slice(0, 2),
+      ...prev.slice(0, 4),
     ]);
     setLastUpdateAt(Date.now());
     playNotification();
@@ -274,6 +364,8 @@ export function AnalyticsProvider({ children }) {
     demoScriptRunning,
     demoStepMessage,
     lastUpdateAt,
+    notifications,
+    setNotifications,
   };
 
   return <AnalyticsContext.Provider value={value}>{children}</AnalyticsContext.Provider>;

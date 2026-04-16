@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import time
 from typing import Any, Dict, List
@@ -10,6 +10,8 @@ from app.services import notification_service, ticket_service
 
 
 _monitor_started = False
+_last_escalation_at: Dict[str, datetime] = {}
+_escalation_cooldown = timedelta(hours=6)
 
 
 def check_sla(ticket: Dict[str, Any]) -> Dict[str, Any]:
@@ -45,6 +47,7 @@ def _trigger_escalation_call(ticket: Dict[str, Any]) -> Dict[str, Any]:
 
 def run_sla_monitor() -> List[Dict[str, Any]]:
     escalations: List[Dict[str, Any]] = []
+    now = datetime.utcnow()
 
     for ticket in ticket_service.list_tickets().values():
         if ticket.get("status") == "resolved":
@@ -54,13 +57,23 @@ def run_sla_monitor() -> List[Dict[str, Any]]:
         if not result.get("breached"):
             continue
 
+        ticket_id = str(ticket.get("ticket_id", ""))
+        if ticket_id:
+            last_sent_at = _last_escalation_at.get(ticket_id)
+            if last_sent_at and (now - last_sent_at) < _escalation_cooldown:
+                continue
+
         sms_message = f"Your complaint {ticket.get('ticket_id', '')} is delayed. We are escalating."
         sms_status = notification_service.send_sms(str(ticket.get("mobile", "")), sms_message)
         escalation_status = _trigger_escalation_call(ticket)
 
+        if ticket_id:
+            # Record attempt time to avoid repeated sends for the same ticket.
+            _last_escalation_at[ticket_id] = now
+
         escalations.append(
             {
-                "ticket_id": ticket.get("ticket_id", ""),
+                "ticket_id": ticket_id,
                 "sms": sms_status,
                 "outbound_call": escalation_status,
             }
@@ -78,6 +91,9 @@ def sla_background() -> None:
 def start_sla_background_monitor() -> None:
     global _monitor_started
     if _monitor_started:
+        return
+
+    if not settings.SLA_MONITOR_ENABLED:
         return
 
     thread = threading.Thread(target=sla_background, daemon=True)

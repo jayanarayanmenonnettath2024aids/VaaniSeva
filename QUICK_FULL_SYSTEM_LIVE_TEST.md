@@ -14,7 +14,7 @@ cd C:\Users\JAYAN\Downloads\NII
 What it does automatically:
 
 1. Checks required tools (`python`, `node`, `npm`, `ngrok`, `ollama`).
-2. Validates required Exotel/Twilio/BASE_URL keys in `.env`.
+2. Validates required Twilio/BASE_URL keys in `.env`.
 3. Installs frontend dependencies if missing.
 4. Tries to prewarm Ollama using `prewarm_ollama.bat`.
 
@@ -22,8 +22,8 @@ What it does automatically:
 
 1. Ollama running locally.
 2. Backend dependencies installed.
-3. Exotel inbound and outbound credentials present in `.env`.
-4. Twilio credentials present in `.env` (for SMS/WhatsApp checks).
+3. Twilio credentials present in `.env` (voice + SMS/WhatsApp).
+4. Twilio phone number purchased and voice-enabled.
 5. ngrok installed.
 
 ## 2. Start ngrok first (important)
@@ -46,9 +46,9 @@ Now update `.env`:
 
 Save `.env`.
 
-## 3. Exotel website setup (inbound call)
+## 3. Twilio website setup (inbound call)
 
-Go to Exotel dashboard for your inbound account and open your inbound number settings.
+Go to Twilio Console and open your purchased number voice settings.
 
 Set incoming call webhook URL to:
 
@@ -105,12 +105,12 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/outbound-call" -Method Post -Conte
 
 Expected:
 
-1. If Exotel outbound credentials are valid: success response with provider payload
+1. If Twilio voice credentials are valid: success response with provider payload
 2. If credentials are wrong/missing: provider error (fix credentials/account access)
 
-## 6. Real inbound test from phone (actual Exotel flow)
+## 6. Real inbound test from phone (actual Twilio flow)
 
-1. Dial your Exotel inbound number.
+1. Dial your Twilio inbound number.
 2. Speak complaint after beep.
 3. You should hear: "Thank you. Please wait while we process your request."
 4. System should continue processing in background.
@@ -165,10 +165,10 @@ Expected: all tests pass and report generated.
 
 1. ngrok URL changed after restart:
 - Update `BASE_URL` and `PUBLIC_BASE_URL` again.
-- Re-save Exotel inbound webhook URL to new ngrok URL.
+- Re-save Twilio inbound webhook URL to new ngrok URL.
 
 2. Inbound returns 400:
-- Confirm Exotel is calling `/incoming-call` with form data.
+- Confirm Twilio is calling `/incoming-call` with form data.
 
 3. Outbound returns provider error:
 - Verify outbound account SID/token/number in `.env`.

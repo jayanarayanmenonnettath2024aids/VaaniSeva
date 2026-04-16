@@ -1,4 +1,5 @@
-from typing import Any, Dict
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 import logging
 import threading
 
@@ -8,11 +9,43 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_sms_blocked_until: Optional[datetime] = None
+_wa_blocked_until: Optional[datetime] = None
+
+
+def _remaining_block_seconds(until: Optional[datetime]) -> int:
+    if not until:
+        return 0
+    remaining = int((until - datetime.utcnow()).total_seconds())
+    return remaining if remaining > 0 else 0
+
+
+def _retry_after_seconds(response: requests.Response) -> int:
+    raw = response.headers.get("Retry-After", "").strip()
+    if raw.isdigit():
+        return max(1, int(raw))
+    # Twilio may omit Retry-After; use conservative default.
+    return 300
+
+
+def _msg_account_sid() -> str:
+    return settings.TWILIO_MSG_ACCOUNT_SID
+
+
+def _msg_auth_token() -> str:
+    return settings.TWILIO_MSG_AUTH_TOKEN
+
+
+def _sms_from_number() -> str:
+    return settings.TWILIO_SMS_NUMBER
+
 
 def _send_async(fn, *args, **kwargs) -> None:
     def runner() -> None:
         try:
-            fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
+            if isinstance(result, dict):
+                logger.info("[MSG ASYNC RESULT] %s", result)
         except Exception as exc:
             logger.error("[MSG ASYNC ERROR] %s", exc)
 
@@ -20,13 +53,26 @@ def _send_async(fn, *args, **kwargs) -> None:
 
 
 def format_sms(ticket: Dict[str, Any]) -> str:
-    priority = str(ticket.get("priority", "low")).upper()
+    customer_name = str(ticket.get("customer_name", "") or "Customer")
+    ticket_id = str(ticket.get("ticket_id", "") or "")
+    issue = str(ticket.get("issue", "") or "General complaint")
+    department = str(ticket.get("department", "") or "General Department")
+    location = str(
+        ticket.get("normalized_location", "")
+        or ticket.get("location", "")
+        or "Unknown"
+    )
+    sla_hours = int(ticket.get("sla_hours", 24) or 24)
     return (
-        f"Dear {ticket.get('customer_name', 'Citizen')}, your complaint has been registered. "
-        f"Ticket ID: {ticket.get('ticket_id', '')} "
-        f"Priority: {priority} "
-        f"Department: {ticket.get('department', '')} "
-        f"Resolution within: {ticket.get('sla_hours', 24)} hours."
+        f"Hello {customer_name}!\n\n"
+        "Your complaint has been registered successfully.\n\n"
+        f"Ticket ID  : {ticket_id}\n"
+        f"Issue      : {issue}\n"
+        f"Department : {department}\n"
+        f"Location   : {location}\n"
+        f"SLA        : {sla_hours} hours\n\n"
+        "We will resolve your issue shortly.\n"
+        "Thank you for reaching out!"
     )
 
 
@@ -57,46 +103,125 @@ def _normalize_whatsapp_sender(value: str) -> str:
 
 
 def format_whatsapp_message(ticket: Dict[str, Any]) -> str:
+    customer_name = str(ticket.get("customer_name", "") or "Customer")
+    ticket_id = str(ticket.get("ticket_id", "") or "")
+    issue = str(ticket.get("issue", "") or "General complaint")
+    department = str(ticket.get("department", "") or "General Department")
+    location = str(
+        ticket.get("normalized_location", "")
+        or ticket.get("location", "")
+        or "Unknown"
+    )
+    sla_hours = int(ticket.get("sla_hours", 24) or 24)
     return (
-        f"Hello {ticket.get('customer_name', 'Citizen')}! 👋\n\n"
-        f"🎫 Ticket ID: {ticket.get('ticket_id', '')}\n"
-        f"📋 Issue: {ticket.get('issue', '')}\n"
-        f"🏢 Department: {ticket.get('department', '')}\n"
-        f"📍 Location: {ticket.get('location', '')}\n"
-        f"⏰ SLA: {ticket.get('sla_hours', 24)} hours"
+        f"Hello {customer_name}! 👋\n\n"
+        "Your complaint has been registered successfully.\n\n"
+        f"🎫 Ticket ID  : {ticket_id}\n"
+        f"📋 Issue      : {issue}\n"
+        f"🏢 Department : {department}\n"
+        f"📍 Location   : {location}\n"
+        f"⏰ SLA        : {sla_hours} hours\n\n"
+        "We will resolve your issue shortly.\n"
+        "Thank you for reaching out!"
     )
 
 
-def _twilio_messages_url() -> str:
-    return (
-        "https://api.twilio.com/2010-04-01/Accounts/"
-        f"{settings.TWILIO_ACCOUNT_SID}/Messages.json"
-    )
+def send_customer_notifications(mobile: str, sms_message: str, whatsapp_message: str) -> Dict[str, Any]:
+    """Send SMS and WhatsApp with one retry on Twilio rate-limit.
 
-
-def send_sms(mobile: str, message: str) -> Dict[str, Any]:
-    """Send SMS via Twilio with E.164 format validation and strict timeouts."""
+    This keeps call flow non-blocking while making delivery more resilient.
+    """
     normalized_mobile = normalize_phone(mobile)
     if not normalized_mobile:
         return {"status": "skipped", "reason": "mobile_invalid_format"}
 
-    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
+    sms_result = send_sms(normalized_mobile, sms_message)
+    wa_result = send_whatsapp(normalized_mobile, whatsapp_message)
+
+    # If Twilio asks us to back off, perform a single delayed retry in background.
+    retry_after = 0
+    if isinstance(sms_result, dict) and sms_result.get("error") == "sms_rate_limited":
+        retry_after = max(retry_after, int(sms_result.get("retry_after_seconds", 0) or 0))
+    if isinstance(wa_result, dict) and wa_result.get("error") == "whatsapp_rate_limited":
+        retry_after = max(retry_after, int(wa_result.get("retry_after_seconds", 0) or 0))
+
+    if retry_after > 0:
+        def delayed_retry() -> None:
+            try:
+                logger.info("[MSG RETRY] Rate-limited. Retrying SMS/WhatsApp after %ss for %s", retry_after, normalized_mobile)
+                threading.Event().wait(retry_after)
+                retry_sms = send_sms(normalized_mobile, sms_message)
+                retry_wa = send_whatsapp(normalized_mobile, whatsapp_message)
+                logger.info("[MSG RETRY RESULT] SMS=%s WHATSAPP=%s", retry_sms, retry_wa)
+            except Exception as exc:
+                logger.error("[MSG RETRY ERROR] %s", exc)
+
+        threading.Thread(target=delayed_retry, daemon=True).start()
+
+    return {
+        "status": "ok",
+        "sms": sms_result,
+        "whatsapp": wa_result,
+        "retry_scheduled": retry_after > 0,
+        "retry_after_seconds": retry_after,
+    }
+
+
+def _twilio_messages_url() -> str:
+    account_sid = _msg_account_sid()
+    return (
+        "https://api.twilio.com/2010-04-01/Accounts/"
+        f"{account_sid}/Messages.json"
+    )
+
+
+def _message_status_callback_url() -> str:
+    base = str(settings.BASE_URL or "").strip().rstrip("/")
+    if not base:
+        return ""
+    return f"{base}/message-status"
+
+
+def send_sms(mobile: str, message: str) -> Dict[str, Any]:
+    """Send SMS via Twilio with E.164 format validation and strict timeouts."""
+    global _sms_blocked_until
+
+    blocked_seconds = _remaining_block_seconds(_sms_blocked_until)
+    if blocked_seconds > 0:
+        return {
+            "status": "skipped",
+            "reason": "sms_rate_limited",
+            "retry_after_seconds": blocked_seconds,
+        }
+
+    normalized_mobile = normalize_phone(mobile)
+    if not normalized_mobile:
+        return {"status": "skipped", "reason": "mobile_invalid_format"}
+
+    account_sid = _msg_account_sid()
+    auth_token = _msg_auth_token()
+    sms_from = _sms_from_number()
+
+    if not account_sid or not auth_token:
         return {"status": "skipped", "reason": "twilio_credentials_missing"}
 
-    if not settings.TWILIO_PHONE_NUMBER:
+    if not sms_from:
         return {"status": "skipped", "reason": "twilio_from_number_missing"}
 
     payload = {
-        "From": settings.TWILIO_PHONE_NUMBER,  # E.164 format: +1234567890 or short code
+        "From": sms_from,                      # E.164 format: +1234567890 or short code
         "To": normalized_mobile,               # E.164 format: +919876543210
         "Body": message,
     }
+    callback_url = _message_status_callback_url()
+    if callback_url:
+        payload["StatusCallback"] = callback_url
 
     try:
         response = requests.post(
             _twilio_messages_url(),
             data=payload,
-            auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+            auth=(account_sid, auth_token),
             timeout=5,
         )
         response.raise_for_status()
@@ -105,17 +230,44 @@ def send_sms(mobile: str, message: str) -> Dict[str, Any]:
         logger.exception("Twilio SMS timeout")
         return {"status": "error", "error": "sms_timeout"}
     except requests.RequestException as exc:
+        response = getattr(exc, "response", None)
+        if response is not None and response.status_code == 429:
+            retry_after = _retry_after_seconds(response)
+            _sms_blocked_until = datetime.utcnow() + timedelta(seconds=retry_after)
+            logger.warning(
+                "Twilio SMS rate-limited (429). Pausing SMS sends for %ss.",
+                retry_after,
+            )
+            return {
+                "status": "error",
+                "error": "sms_rate_limited",
+                "message": "Twilio SMS rate-limited",
+                "retry_after_seconds": retry_after,
+            }
         logger.exception("Twilio SMS request failed: %s", exc)
         return {"status": "error", "error": "sms_failed", "message": str(exc)}
 
 
 def send_whatsapp(mobile: str, message: str) -> Dict[str, Any]:
     """Send WhatsApp message via Twilio with E.164 format."""
+    global _wa_blocked_until
+
+    blocked_seconds = _remaining_block_seconds(_wa_blocked_until)
+    if blocked_seconds > 0:
+        return {
+            "status": "skipped",
+            "reason": "whatsapp_rate_limited",
+            "retry_after_seconds": blocked_seconds,
+        }
+
     normalized_mobile = normalize_phone(mobile)
     if not normalized_mobile:
         return {"status": "skipped", "reason": "mobile_invalid_format"}
 
-    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
+    account_sid = _msg_account_sid()
+    auth_token = _msg_auth_token()
+
+    if not account_sid or not auth_token:
         return {"status": "skipped", "reason": "twilio_credentials_missing"}
     if not settings.TWILIO_WHATSAPP_NUMBER:
         return {"status": "skipped", "reason": "whatsapp_number_missing"}
@@ -127,12 +279,15 @@ def send_whatsapp(mobile: str, message: str) -> Dict[str, Any]:
         "To": f"whatsapp:{normalized_mobile}",
         "Body": message,
     }
+    callback_url = _message_status_callback_url()
+    if callback_url:
+        payload["StatusCallback"] = callback_url
 
     try:
         response = requests.post(
             _twilio_messages_url(),
             data=payload,
-            auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+            auth=(account_sid, auth_token),
             timeout=5,
         )
         response.raise_for_status()
@@ -141,5 +296,19 @@ def send_whatsapp(mobile: str, message: str) -> Dict[str, Any]:
         logger.exception("Twilio WhatsApp timeout")
         return {"status": "error", "error": "whatsapp_timeout"}
     except requests.RequestException as exc:
+        response = getattr(exc, "response", None)
+        if response is not None and response.status_code == 429:
+            retry_after = _retry_after_seconds(response)
+            _wa_blocked_until = datetime.utcnow() + timedelta(seconds=retry_after)
+            logger.warning(
+                "Twilio WhatsApp rate-limited (429). Pausing WhatsApp sends for %ss.",
+                retry_after,
+            )
+            return {
+                "status": "error",
+                "error": "whatsapp_rate_limited",
+                "message": "Twilio WhatsApp rate-limited",
+                "retry_after_seconds": retry_after,
+            }
         logger.exception("Twilio WhatsApp request failed: %s", exc)
         return {"status": "error", "error": "whatsapp_failed", "message": str(exc)}

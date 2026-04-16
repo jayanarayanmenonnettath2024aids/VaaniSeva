@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-03-27T08:15:39.973356",
+  "timestamp": "2026-03-28T01:16:39.236679",
   "backend_url": "http://127.0.0.1:8000",
-  "duration_seconds": 7.803053,
+  "duration_seconds": 10.970415,
   "tests": [
     {
       "name": "Health Endpoint",
@@ -49,7 +49,7 @@
       "name": "  \u251c\u2500 Ticket Created",
       "passed": true,
       "status_code": null,
-      "details": "ticket: TKT-031497"
+      "details": "ticket: TKT-513267"
     },
     {
       "name": "  \u251c\u2500 Department Assigned",
@@ -97,13 +97,13 @@
       "name": "Setup: Call ID",
       "passed": true,
       "status_code": null,
-      "details": "id: integ-e2e-7994"
+      "details": "id: integ-e2e-9371"
     },
     {
       "name": "Setup: Mobile",
       "passed": true,
       "status_code": null,
-      "details": "mobile: +919523186835"
+      "details": "mobile: +919029912619"
     },
     {
       "name": "  \u251c\u2500 Incoming Call",
@@ -139,7 +139,7 @@
       "name": "  \u2514\u2500 Tickets in DB",
       "passed": true,
       "status_code": null,
-      "details": "count: 17"
+      "details": "count: 27"
     },
     {
       "name": "  \u251c\u2500 Rejects Invalid URL",
@@ -169,13 +169,13 @@
       "name": "DB: Tickets Table",
       "passed": true,
       "status_code": null,
-      "details": "count: 17"
+      "details": "count: 27"
     },
     {
       "name": "DB: Audit Timeline",
       "passed": true,
       "status_code": null,
-      "details": "count: 32"
+      "details": "count: 64"
     },
     {
       "name": "DB: DPDP Hashed Refs",
