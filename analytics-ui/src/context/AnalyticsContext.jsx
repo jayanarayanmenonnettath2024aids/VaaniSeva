@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo, useState, useEffect, useCallback } 
 import { complaints as seedComplaints } from "../data/mockData";
 
 const AnalyticsContext = createContext(null);
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 function mapTicketToComplaint(ticket) {
   return {
@@ -35,6 +35,7 @@ function isWithinRange(createdAt, range) {
 
 export function AnalyticsProvider({ children }) {
   const [complaints, setComplaints] = useState(seedComplaints);
+  const [vertical, setVertical] = useState("Civic");
   const [dateRange, setDateRangeState] = useState("7d");
   const [issueType, setIssueType] = useState("All");
   const [department, setDepartment] = useState("All");
@@ -44,7 +45,7 @@ export function AnalyticsProvider({ children }) {
   const [demoStepMessage, setDemoStepMessage] = useState("Ready");
   const [liveTranscript, setLiveTranscript] = useState("There is a pothole near my house in Anna Nagar.");
   const [impactStatement, setImpactStatement] = useState(
-    "This system can reduce grievance resolution delays by 40%."
+    "This system can reduce service resolution delays by 40%."
   );
   const [systemStatus] = useState({
     aiEngine: "Active",
@@ -403,6 +404,8 @@ export function AnalyticsProvider({ children }) {
     filteredComplaints,
     dateRange,
     setDateRange,
+    vertical,
+    setVertical,
     issueType,
     setIssueType,
     department,

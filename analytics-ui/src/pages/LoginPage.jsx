@@ -3,10 +3,10 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const DEMO = [
-  { username: "admin",       password: "admin123", label: "National Admin",     role: "Admin",        icon: "🛡️", color: "blue"   },
-  { username: "pwd_officer",   password: "pwd123",   label: "PWD Department",     role: "Dept Officer", icon: "🏗️", color: "emerald"},
-  { username: "water_officer", password: "water123", label: "Water Board",        role: "Dept Officer", icon: "⚡", color: "amber"  },
-  { username: "sanitation",    password: "sanit123", label: "Sanitation Dept.",   role: "Dept Officer", icon: "♻️", color: "violet" },
+  { username: "admin",         password: "admin123",   label: "Platform Admin",    role: "Admin",             icon: "🛡️", color: "blue"   },
+  { username: "pwd_officer",   password: "pwd123",     label: "Field Ops Team",    role: "Resolver Team",     icon: "🏗️", color: "emerald"},
+  { username: "water_officer", password: "water123",   label: "Service Ops Team",  role: "Resolver Team",     icon: "⚡", color: "amber"  },
+  { username: "sanitation",    password: "sanit123",   label: "Support Ops Team",  role: "Resolver Team",     icon: "♻️", color: "violet" },
 ];
 
 const chipColors = {
@@ -53,14 +53,14 @@ export function LoginPage() {
           <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center font-black text-white shadow-xl shadow-blue-600/40 group-hover:scale-105 transition-transform">V</div>
           <div>
             <p className="font-black text-white text-xl tracking-tight">VAANISEVA</p>
-            <p className="text-[9px] text-blue-400 font-black uppercase tracking-[0.25em]">Gov Intelligence</p>
+            <p className="text-[9px] text-blue-400 font-black uppercase tracking-[0.25em]">Voice Ops Intelligence</p>
           </div>
         </Link>
 
         {/* Hero text */}
         <div className="relative">
           <div className="inline-flex items-center gap-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-[9px] font-black px-3 py-1 rounded-full mb-6 uppercase tracking-[0.2em]">
-            🔒 Secure Official Portal
+            🔒 Secure Operations Portal
           </div>
           <h2 className="text-4xl xl:text-5xl font-black text-white leading-[1.1] tracking-tight mb-5">
             Empowering Officers.<br />
@@ -69,7 +69,7 @@ export function LoginPage() {
             </span>
           </h2>
           <p className="text-slate-400 text-base font-medium leading-relaxed max-w-sm">
-            Access your personalised command center to track SLAs, monitor grievances, and resolve citizen issues with AI intelligence.
+            Access your command center to track SLAs, monitor service issues, and resolve cases across civic and enterprise workflows.
           </p>
         </div>
 
@@ -102,7 +102,7 @@ export function LoginPage() {
           {/* Heading */}
           <div className="mb-8">
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Welcome back</h1>
-            <p className="text-slate-500 font-medium mt-1.5 text-sm">Sign in to your government portal</p>
+            <p className="text-slate-500 font-medium mt-1.5 text-sm">Sign in to your operations portal</p>
           </div>
 
           {/* Error */}
@@ -117,7 +117,7 @@ export function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="username" className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">
-                Officer ID / Username
+                Operator ID / Username
               </label>
               <input
                 id="username"

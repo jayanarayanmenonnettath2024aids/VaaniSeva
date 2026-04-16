@@ -184,7 +184,7 @@ export function LandingPage() {
           <div>
             <div className="inline-flex items-center gap-2 bg-white border border-blue-200 text-blue-700 text-[10px] font-black px-4 py-1.5 rounded-full mb-4 uppercase tracking-[0.2em] shadow-sm">
               <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative rounded-full h-1.5 w-1.5 bg-blue-600"></span></span>
-              Government of India · Live
+                Civic + Enterprise · Live
             </div>
             <h1 className="text-4xl md:text-[52px] font-black text-slate-900 leading-[1.05] tracking-tighter mb-4">
               Every Voice<br />
@@ -193,7 +193,7 @@ export function LandingPage() {
               </span>
             </h1>
             <p className="text-base text-slate-500 font-medium leading-relaxed mb-5 max-w-md">
-              AI-powered grievance intelligence that converts citizen voice calls into resolved actions — <span className="text-slate-800 font-bold">in under 60 seconds</span>.
+              AI-powered service intelligence that converts voice calls into tracked, SLA-bound actions — <span className="text-slate-800 font-bold">in under 60 seconds</span>.
             </p>
             <div className="flex gap-2.5 mb-5">
               <Link to="/login" className="group relative bg-blue-600 text-white font-black px-7 py-3.5 rounded-xl text-sm shadow-lg shadow-blue-500/25 hover:-translate-y-0.5 hover:shadow-xl transition-all uppercase tracking-wider overflow-hidden">
@@ -256,7 +256,7 @@ export function LandingPage() {
       <section className="py-4 border-y border-slate-100 bg-slate-50/80">
         <div className="max-w-5xl mx-auto px-6 flex flex-wrap items-center justify-center gap-6">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trusted by:</span>
-          {["MoHUA","CPWD","MoP (Power)","Jal Shakti","MoHFW","MoRD","MoE","Railways","DoT"].map(d => (
+          {["MoHUA","CPWD","Airtel Ops","HDFC Service","Apollo Ops","Utilities","Railways","Smart Cities","Enterprise CX"].map(d => (
             <span key={d} className="text-xs font-bold text-slate-400 hover:text-blue-600 transition-colors cursor-default">{d}</span>
           ))}
         </div>
@@ -270,10 +270,10 @@ export function LandingPage() {
           <div className="grid md:grid-cols-4 gap-4 relative">
             <div className="hidden md:block absolute top-8 left-[14%] right-[14%] h-px bg-gradient-to-r from-blue-200 via-blue-400 to-blue-200"></div>
             {[
-              { n: "01", icon: "📞", t: "Voice Call",         d: "Citizen dials the helpline in any Indian language" },
+              { n: "01", icon: "📞", t: "Voice Call",         d: "User dials support in any Indian language" },
               { n: "02", icon: "🤖", t: "AI Processing",      d: "Speech-to-text, classification, location extraction" },
-              { n: "03", icon: "🎫", t: "Ticket Created",     d: "Auto-routed to the correct dept with SLA deadline" },
-              { n: "04", icon: "✅", t: "Resolved & Notified", d: "Officer resolves issue, citizen gets SMS" },
+              { n: "03", icon: "🎫", t: "Ticket Created",     d: "Auto-routed to the correct team with SLA deadline" },
+              { n: "04", icon: "✅", t: "Resolved & Notified", d: "Agent resolves issue, user gets SMS" },
             ].map((s) => (
               <RevealSection key={s.n} className="text-center group">
                 <div className="w-16 h-16 mx-auto mb-3 rounded-xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center text-2xl group-hover:bg-blue-100 group-hover:border-blue-400 group-hover:scale-110 transition-all duration-500 relative z-10 bg-white">{s.icon}</div>

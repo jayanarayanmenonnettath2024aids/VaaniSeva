@@ -3,6 +3,8 @@ import { useAnalytics } from "../context/AnalyticsContext";
 
 export function GlobalFilters() {
   const {
+    vertical,
+    setVertical,
     dateRange,
     setDateRange,
     issueType,
@@ -14,6 +16,7 @@ export function GlobalFilters() {
   } = useAnalytics();
 
   const resetAll = () => {
+    setVertical("Civic");
     setIssueType("All");
     setDepartment("All");
     setDateRange("7d");
@@ -26,6 +29,25 @@ export function GlobalFilters() {
   return (
     <section className="panel p-5">
       <div className="flex flex-col lg:flex-row lg:items-end gap-5">
+
+        {/* Vertical */}
+        <div className="flex-1 min-w-[160px]">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Use Case</p>
+          <div className="relative">
+            <select
+              value={vertical}
+              onChange={(e) => setVertical(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm font-semibold text-slate-800 shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer"
+            >
+              {["Civic", "Telecom", "Banking", "Healthcare", "Enterprise Ops"].map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+        </div>
 
         {/* Time Filter */}
         <div className="flex-shrink-0">
@@ -67,9 +89,9 @@ export function GlobalFilters() {
           </div>
         </div>
 
-        {/* Department */}
+        {/* Resolver Team */}
         <div className="flex-1 min-w-[160px]">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Department</p>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Resolver Team</p>
           <div className="relative">
             <select
               value={department}

@@ -13,7 +13,7 @@ const nav = [
     ["⏱️ SLA & Risk",             "/admin/sla"],
     ["📈 Performance",            "/admin/performance"],
   ] },
-  { label: "Department", role: "department", items: [
+  { label: "Operations", role: "department", items: [
     ["📊 Overview",               "/department"],
     ["🔥 Heatmap",                "/department/heatmap"],
     ["🎫 Tickets",                "/department/tickets"],
@@ -124,9 +124,9 @@ export function AppShell({ children, title, subtitle }) {
             <p className="text-xs uppercase tracking-[0.2em] font-black text-blue-400">VAANISEVA</p>
           </div>
           <h1 className="text-lg font-black tracking-tight text-white leading-snug">
-            {user?.role === "department" ? `${user.department || "Department"} Portal` : "Command Center"}
+            {user?.role === "department" ? `${user.department || "Operations"} Workspace` : "Command Center"}
           </h1>
-          <p className="text-slate-500 text-[9px] uppercase font-black tracking-wider mt-0.5">Unified Grievance Intelligence</p>
+          <p className="text-slate-500 text-[9px] uppercase font-black tracking-wider mt-0.5">Unified Service Intelligence</p>
         </div>
 
         {/* Navigation */}
